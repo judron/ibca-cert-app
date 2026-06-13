@@ -334,30 +334,60 @@
     setHTML('<div class="loading">טוען נתוני משתתפים…</div>');
     db.collection("participants").get().then(function(snap){
       var parts = []; snap.forEach(function(d){ parts.push({uid:d.id, data:d.data()}); });
-      var html = backLink()+'<h1>מסך הוועדה</h1><p class="lead">'+parts.length+' משתתפים רשומים.</p>';
-      if (!parts.length){ setHTML(html+'<div class="card"><div class="alert alert-info">אין עדיין משתתפים.</div></div>'); return; }
-      html += '<div id="adminList"></div>';
-      setHTML(html);
-      var list = document.getElementById("adminList");
-      parts.forEach(function(p){
-        var card = document.createElement("div"); card.className="card";
-        card.innerHTML = '<h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3><div class="muted">עודכן: '+fmtDate(p.data.updatedAt)+'</div><div class="muted">טוען מסמכים…</div>';
-        list.appendChild(card);
-        Promise.all([
+      if (!parts.length){ setHTML(backLink()+'<h1>מסך הוועדה</h1><div class="card"><div class="alert alert-info">אין עדיין משתתפים רשומים.</div></div>'); return; }
+      return Promise.all(parts.map(function(p){
+        return Promise.all([
           db.collection("participants").doc(p.uid).collection("forms").get(),
           db.collection("participants").doc(p.uid).collection("uploads").get()
         ]).then(function(r){
-          var h = '<h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3><div class="muted">עודכן: '+fmtDate(p.data.updatedAt)+'</div>';
-          h += '<table class="tbl"><tr><th>פריט</th><th>סטטוס</th><th></th></tr>';
-          var forms = {}; r[0].forEach(function(d){ forms[d.id]=d.data(); });
-          CFG.forms.forEach(function(f){ var fd=forms[f.id]; h += '<tr><td>'+esc(f.title)+'</td><td>'+(fd?'<span class="badge badge-done">נחתם</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+(fd&&fd.signatureUrl?'<a href="'+esc(fd.signatureUrl)+'" target="_blank">חתימה</a>':'')+'</td></tr>'; });
-          var ups = {}; r[1].forEach(function(d){ var u=d.data(); (ups[u.itemId]=ups[u.itemId]||[]).push(u); });
-          CFG.requiredUploads.forEach(function(it){ var arr=ups[it.id]||[]; var links=arr.map(function(u){return '<a href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>';}).join("<br>"); h += '<tr><td>'+esc(it.title)+'</td><td>'+(arr.length?'<span class="badge badge-done">'+arr.length+'</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+links+'</td></tr>'; });
-          h += '</table>';
-          card.innerHTML = h;
-        }).catch(function(err){ card.innerHTML = '<h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3><div class="alert alert-err">שגיאה בטעינת מסמכים: '+esc(err.message)+'</div>'; });
+          p.forms = {}; r[0].forEach(function(d){ p.forms[d.id] = d.data(); });
+          p.uploads = {}; r[1].forEach(function(d){ var u = d.data(); (p.uploads[u.itemId] = p.uploads[u.itemId] || []).push(u); });
+          return p;
+        });
+      })).then(renderAdmin);
+    }).catch(function(err){ setHTML(backLink()+'<div class="card"><div class="alert alert-err">שגיאה בטעינה (ודאו שכתובת המייל מוגדרת כמנהל בכללי האבטחה): '+esc(err.message)+'</div></div>'); });
+  }
+
+  function renderAdmin(parts){
+    var totalItems = CFG.forms.length + CFG.requiredUploads.length;
+    function doneCount(p){ var c=0; CFG.forms.forEach(function(f){ if(p.forms[f.id]) c++; }); CFG.requiredUploads.forEach(function(it){ if(p.uploads[it.id]) c++; }); return c; }
+    var fullyDone = parts.filter(function(p){ return doneCount(p)===totalItems; }).length;
+
+    var html = backLink()+'<h1>מסך הוועדה</h1>'+
+      '<p class="lead">'+parts.length+' משתתפים · '+fullyDone+' השלימו את כל הפריטים.</p>';
+
+    // ----- overview matrix: who submitted what -----
+    var okC = '<span style="color:#2E7D32;font-weight:700">✓</span>';
+    function xC(){ return '<span style="color:#C0392B">✗</span>'; }
+    html += '<div class="card"><h2 style="margin-top:0">סטטוס כללי — מי הגיש מה</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>משתתף</th>';
+    CFG.forms.forEach(function(f){ html += '<th style="text-align:center">'+esc(f.short||f.title)+'</th>'; });
+    CFG.requiredUploads.forEach(function(it){ html += '<th style="text-align:center">'+esc(it.short||it.title)+'</th>'; });
+    html += '<th style="text-align:center">הושלם</th></tr></thead><tbody>';
+    parts.forEach(function(p){
+      html += '<tr><td style="white-space:nowrap">'+esc(p.data.email||p.uid)+'</td>';
+      CFG.forms.forEach(function(f){ html += '<td style="text-align:center">'+(p.forms[f.id]?okC:xC())+'</td>'; });
+      CFG.requiredUploads.forEach(function(it){ var n=(p.uploads[it.id]||[]).length; html += '<td style="text-align:center">'+(n?(okC+(n>1?' '+n:'')):xC())+'</td>'; });
+      html += '<td style="text-align:center;white-space:nowrap">'+doneCount(p)+'/'+totalItems+'</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+
+    // ----- per-participant detail with file links -----
+    html += '<h2>פירוט וקבצים לכל משתתף</h2>';
+    parts.forEach(function(p){
+      html += '<div class="card"><h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3>'+
+        '<div class="muted">עודכן: '+fmtDate(p.data.updatedAt)+' · הושלמו '+doneCount(p)+'/'+totalItems+'</div>'+
+        '<table class="tbl"><tr><th>פריט</th><th>סטטוס</th><th>קבצים</th></tr>';
+      CFG.forms.forEach(function(f){ var fd=p.forms[f.id];
+        html += '<tr><td>'+esc(f.title)+'</td><td>'+(fd?'<span class="badge badge-done">נחתם '+fmtDate(fd.submittedAt)+'</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+(fd&&fd.signatureUrl?'<a href="'+esc(fd.signatureUrl)+'" target="_blank">צפייה בחתימה</a>':'')+'</td></tr>';
       });
-    }).catch(function(err){ setHTML('<div class="card"><div class="alert alert-err">שגיאה (ודאו שכתובת המייל מוגדרת כמנהל בכללי האבטחה): '+esc(err.message)+'</div></div>'); });
+      CFG.requiredUploads.forEach(function(it){ var arr=p.uploads[it.id]||[];
+        var links=arr.map(function(u){ return '<a href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>'; }).join('<br>');
+        html += '<tr><td>'+esc(it.title)+'</td><td>'+(arr.length?'<span class="badge badge-done">'+arr.length+' קבצים</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+links+'</td></tr>';
+      });
+      html += '</table></div>';
+    });
+
+    setHTML(html);
   }
 
   init();
