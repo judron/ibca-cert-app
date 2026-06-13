@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הסמכת קוד המקצוע · לשכת היועצים העסקיים והניהוליים</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-title">לשכת היועצים העסקיים והניהוליים בישראל</span>
+        <span class="brand-sub">ועדת קוד המקצוע · הסמכה</span>
+      </div>
+      <div id="userBox" class="user-box" hidden>
+        <span id="userEmail" class="user-email"></span>
+        <button id="logoutBtn" class="btn btn-ghost">יציאה</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="container">
+    <div class="loading">טוען…</div>
+  </main>
+
+  <footer class="footer">
+    <span>לשכת היועצים העסקיים והניהוליים בישראל (IBCA) · ועדת קוד המקצוע</span>
+  </footer>
+
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
+
+  <!-- App -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
