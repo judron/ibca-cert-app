@@ -105,6 +105,16 @@ h3{color:var(--navy2); font-size:16px; margin:16px 0 6px}
 .alert-info{background:var(--boxblue); color:var(--navy)}
 .alert-warn{background:#FFF6E5; color:#7a5b14}
 
+/* self-assessment form items */
+.rating-row{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; justify-content:space-between; border-bottom:1px solid var(--line); padding:8px 0}
+.rating-row > label{margin:0; font-weight:500; color:var(--ink)}
+.rating-opts{display:flex; gap:6px; flex-wrap:wrap}
+.rating-opt{display:inline-flex; align-items:center; gap:3px; border:1.5px solid var(--line); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:14px; user-select:none}
+.rating-opt.sel{background:var(--navy); color:#fff; border-color:var(--navy)}
+.rating-opt input{margin:0}
+.chk-group{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:4px 14px; margin-top:4px}
+.chk{display:flex; align-items:center; gap:6px; font-size:14px; font-weight:400; color:var(--ink)}
+.field textarea{resize:vertical; min-height:64px}
 .loading{text-align:center; color:var(--grey); padding:40px}
 .progress{height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin:6px 0 2px}
 .progress > span{display:block; height:100%; background:var(--gold)}

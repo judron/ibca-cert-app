@@ -192,6 +192,7 @@
   }
 
   function renderForm(form, ref, existing){
+    if (form.items) return renderItemsForm(form, ref, existing);
     var html = backLink()+'<h1>'+esc(form.title)+'</h1><p class="lead">'+esc(form.subtitle||"")+'</p>';
     if (existing){ html += '<div class="alert alert-ok">הטופס כבר נחתם ב-'+fmtDate(existing.submittedAt)+'. ניתן לצפות, להדפיס, או למלא מחדש.</div>'; }
     html += '<div class="card">';
@@ -259,6 +260,79 @@
           .then(save)
           .catch(function(err){ btn.disabled=false; btn.textContent="שמירה וחתימה"; msg.innerHTML='<div class="alert alert-err">שגיאת חתימה: '+esc(err.message)+'</div>'; });
       } else { save(null); }
+    };
+  }
+
+  /* ---------- items-based form (self-assessments) ---------- */
+  function renderItemsForm(form, ref, existing){
+    var data = (existing && existing.data) || {};
+    var html = backLink()+'<h1>'+esc(form.title)+'</h1><p class="lead">'+esc(form.subtitle||"")+'</p>';
+    if (existing){ html += '<div class="alert alert-ok">הטופס נשמר ב-'+fmtDate(existing.submittedAt)+'. ניתן לעדכן ולשמור מחדש.</div>'; }
+    html += '<div class="card">';
+    form.items.forEach(function(it){
+      var v = data[it.id];
+      if (it.type==='section'){ html += (it.level===3?'<h3>':'<h2>')+esc(it.label)+(it.level===3?'</h3>':'</h2>'); }
+      else if (it.type==='info'){ html += '<div class="alert alert-info" style="white-space:pre-line">'+esc(it.text)+'</div>'; }
+      else if (it.type==='statement'){ html += '<div style="margin:4px 0">• '+esc(it.text)+'</div>'; }
+      else if (it.type==='text'){ html += '<div class="field"><label>'+esc(it.label)+(it.required?' *':'')+'</label><input type="text" data-fid="'+it.id+'" value="'+esc(v||"")+'"/></div>'; }
+      else if (it.type==='textarea'){ html += '<div class="field"><label>'+esc(it.label)+'</label><textarea data-fid="'+it.id+'" rows="3">'+esc(v||"")+'</textarea></div>'; }
+      else if (it.type==='rating'){
+        var mx=it.max||5, start=it.zero?0:1, o='';
+        for (var n=start;n<=mx;n++){ var sel=(String(v)===String(n)); o += '<label class="rating-opt'+(sel?' sel':'')+'"><input type="radio" name="r_'+it.id+'" value="'+n+'"'+(sel?' checked':'')+'/>'+n+'</label>'; }
+        html += '<div class="rating-row"><label>'+esc(it.label)+'</label><div class="rating-opts">'+o+'</div></div>';
+      }
+      else if (it.type==='checkboxes'){
+        html += '<div class="field"><label>'+esc(it.label)+'</label><div class="chk-group">';
+        var arr = Array.isArray(v)?v:[];
+        it.options.forEach(function(opt){ var ck=arr.indexOf(opt)>-1; html += '<label class="chk"><input type="checkbox" data-cg="'+it.id+'" value="'+esc(opt)+'"'+(ck?' checked':'')+'/>'+esc(opt)+'</label>'; });
+        html += '</div>';
+        if (it.other){ html += '<input type="text" data-fid="'+it.id+'_other" placeholder="אחר / פירוט…" value="'+esc(data[it.id+'_other']||"")+'" style="margin-top:6px"/>'; }
+        html += '</div>';
+      }
+    });
+    if (form.confirmText){ html += '<div class="field"><label><input type="checkbox" id="confirmChk" '+(existing?'checked':'')+'/> '+esc(form.confirmText)+'</label></div>'; }
+    if (form.requireSignature){
+      html += '<h3>חתימה</h3><div class="muted">חִתמו בעזרת העכבר או האצבע:</div><div class="sig-wrap"><canvas id="sig" class="sig-canvas"></canvas></div><div class="sig-actions"><button class="btn btn-sm btn-outline" id="sigClear">ניקוי חתימה</button></div>';
+      if (existing && existing.signatureUrl){ html += '<div class="muted" style="margin-top:8px">חתימה קיימת:</div><img src="'+esc(existing.signatureUrl)+'" alt="חתימה" style="max-height:80px;border:1px solid var(--line);border-radius:8px"/>'; }
+    }
+    html += '<div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn btn-primary" id="submitForm">שמירה'+(form.requireSignature?' וחתימה':'')+'</button>'+(existing?'<button class="btn btn-outline no-print" id="printForm">הדפסה / שמירה כ-PDF</button>':'')+'</div><div id="formMsg"></div></div>';
+    setHTML(html);
+
+    Array.prototype.forEach.call(document.querySelectorAll('.rating-opts'), function(grp){
+      grp.addEventListener('change', function(){
+        Array.prototype.forEach.call(grp.querySelectorAll('.rating-opt'), function(l){ l.classList.toggle('sel', l.querySelector('input').checked); });
+      });
+    });
+
+    var pad = form.requireSignature ? new SigPad(document.getElementById("sig")) : null;
+    if (document.getElementById("sigClear")) document.getElementById("sigClear").onclick = function(){ pad.clear(); };
+    if (document.getElementById("printForm")) document.getElementById("printForm").onclick = function(){ window.print(); };
+
+    document.getElementById("submitForm").onclick = function(){
+      var msg = document.getElementById("formMsg");
+      var out = {}, ok = true, firstMissing = null;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-fid]'), function(el){ out[el.getAttribute("data-fid")] = (el.value||"").trim(); });
+      form.items.forEach(function(it){
+        if (it.type==='checkboxes'){ out[it.id] = Array.prototype.slice.call(document.querySelectorAll('[data-cg="'+it.id+'"]:checked')).map(function(c){return c.value;}); }
+        if (it.type==='rating'){ var r=document.querySelector('input[name="r_'+it.id+'"]:checked'); out[it.id] = r?r.value:""; }
+        if (it.required && (it.type==='text'||it.type==='textarea') && !out[it.id]){ ok=false; if(!firstMissing) firstMissing=it.label; }
+      });
+      if (!ok){ msg.innerHTML='<div class="alert alert-err">נא למלא: '+esc(firstMissing)+'</div>'; return; }
+      if (form.confirmText && !document.getElementById("confirmChk").checked){ msg.innerHTML='<div class="alert alert-err">יש לאשר את ההצהרה לפני השמירה.</div>'; return; }
+      var sigData=null;
+      if (form.requireSignature){
+        if (pad.isEmpty() && !(existing&&existing.signatureUrl)){ msg.innerHTML='<div class="alert alert-err">נדרשת חתימה.</div>'; return; }
+        if (!pad.isEmpty()) sigData=pad.toDataURL();
+      }
+      var btn=document.getElementById("submitForm"); btn.disabled=true; btn.textContent="שומר…";
+      var finish=function(signatureUrl){
+        var rec={ formTitle:form.title, data:out, confirmed:true, submittedAt:firebase.firestore.FieldValue.serverTimestamp(), email:currentUser.email };
+        if (signatureUrl) rec.signatureUrl=signatureUrl; else if (existing&&existing.signatureUrl) rec.signatureUrl=existing.signatureUrl;
+        ref.set(rec,{merge:true}).then(function(){ db.collection("participants").doc(currentUser.uid).set({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); toast("נשמר בהצלחה","ok"); go(""); })
+          .catch(function(err){ btn.disabled=false; btn.textContent="שמירה"; msg.innerHTML='<div class="alert alert-err">'+esc(err.message)+'</div>'; });
+      };
+      if (sigData){ var path="participants/"+currentUser.uid+"/signatures/"+form.id+".png"; storage.ref(path).putString(sigData,"data_url").then(function(s){return s.ref.getDownloadURL();}).then(finish).catch(function(err){ btn.disabled=false; btn.textContent="שמירה"; msg.innerHTML='<div class="alert alert-err">שגיאת חתימה: '+esc(err.message)+'</div>'; }); }
+      else finish(null);
     };
   }
 
