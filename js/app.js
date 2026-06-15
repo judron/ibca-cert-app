@@ -59,15 +59,28 @@
     window.addEventListener("hashchange", function(){ if (currentUser) route(); });
   }
 
-  function genProcessNumber(uid){ return "CISBC-" + (new Date().getFullYear()) + "-" + String(uid).slice(-5).toUpperCase(); }
+  function pad3(n){ return n < 1000 ? ("00" + n).slice(-3) : ("" + n); }
 
   function ensureParticipant(user){
-    var ref = db.collection("participants").doc(user.uid);
-    return ref.get().then(function(snap){
+    var pref = db.collection("participants").doc(user.uid);
+    var ts = firebase.firestore.FieldValue.serverTimestamp();
+    return pref.get().then(function(snap){
       participantData = snap.exists ? (snap.data() || {}) : {};
-      var upd = { email: user.email, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-      if (!participantData.processNumber){ participantData.processNumber = genProcessNumber(user.uid); upd.processNumber = participantData.processNumber; }
-      return ref.set(upd, { merge: true });
+      if (participantData.processNumber){
+        return pref.set({ email: user.email, updatedAt: ts }, { merge: true });
+      }
+      var cref = db.collection("counters").doc("process");
+      return db.runTransaction(function(tx){
+        return tx.get(cref).then(function(cs){
+          var last = (cs.exists && cs.data().last) ? cs.data().last : 0;
+          var next = last + 1;
+          var pn = "IBCA-2026-" + pad3(next);
+          tx.set(cref, { last: next }, { merge: true });
+          tx.set(pref, { email: user.email, processNumber: pn, updatedAt: ts }, { merge: true });
+          participantData.processNumber = pn;
+          return pn;
+        });
+      });
     }).catch(function(){});
   }
 
