@@ -9,7 +9,7 @@
   var userEmailEl = document.getElementById("userEmail");
   var CFG = window.APP_CONFIG;
 
-  var auth = null, db = null, storage = null, currentUser = null;
+  var auth = null, db = null, storage = null, currentUser = null, participantData = {};
 
   /* ---------- utilities ---------- */
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
@@ -59,10 +59,16 @@
     window.addEventListener("hashchange", function(){ if (currentUser) route(); });
   }
 
+  function genProcessNumber(uid){ return "CISBC-" + (new Date().getFullYear()) + "-" + String(uid).slice(-5).toUpperCase(); }
+
   function ensureParticipant(user){
     var ref = db.collection("participants").doc(user.uid);
-    return ref.set({ email: user.email, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
-      .catch(function(){});
+    return ref.get().then(function(snap){
+      participantData = snap.exists ? (snap.data() || {}) : {};
+      var upd = { email: user.email, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      if (!participantData.processNumber){ participantData.processNumber = genProcessNumber(user.uid); upd.processNumber = participantData.processNumber; }
+      return ref.set(upd, { merge: true });
+    }).catch(function(){});
   }
 
   /* ---------- login ---------- */
@@ -110,6 +116,7 @@
     return viewDashboard();
   }
   function backLink(){ return '<a class="back" href="#/">→ חזרה לעמוד הראשי</a>'; }
+  function procNumberBlock(){ return '<div class="field"><label>מספר תהליך (מלווה אתכם לאורך התהליך, ויהפוך למספר ההסמכה עם קבלת התעודה)</label><div style="font-weight:700;color:#1F3864;font-size:18px">'+esc(participantData.processNumber||"")+'</div></div>'; }
 
   /* ---------- dashboard ---------- */
   function viewDashboard(){
@@ -127,7 +134,9 @@
       var pct = totalItems ? Math.round(doneCount/totalItems*100) : 0;
 
       var html = '<h1>שלום, '+esc(currentUser.email)+'</h1>'+
-        '<p class="lead">זהו המרחב האישי שלכם בתהליך ההסמכה. כאן ממלאים, מורידים ומעלים את המסמכים הנדרשים.</p>';
+        '<p class="lead">זהו המרחב האישי שלכם בתהליך ההסמכה. כאן ממלאים, מורידים ומעלים את המסמכים הנדרשים.</p>'+
+        '<div class="card" style="padding:12px 16px"><span class="muted">מספר תהליך:</span> <strong style="color:var(--navy)">'+esc(participantData.processNumber||"")+'</strong> '+
+        '<span class="muted" style="font-size:12px">(מלווה אתכם לאורך התהליך, ויהפוך למספר ההסמכה עם קבלת התעודה)</span></div>';
 
       if (isAdmin(currentUser.email)){
         html += '<div class="alert alert-info">יש לך גישת ניהול. <a href="#/admin">למסך הוועדה ←</a></div>';
@@ -196,6 +205,7 @@
     var html = backLink()+'<h1>'+esc(form.title)+'</h1><p class="lead">'+esc(form.subtitle||"")+'</p>';
     if (existing){ html += '<div class="alert alert-ok">הטופס כבר נחתם ב-'+fmtDate(existing.submittedAt)+'. ניתן לצפות, להדפיס, או למלא מחדש.</div>'; }
     html += '<div class="card">';
+    html += procNumberBlock();
     html += '<p>'+esc(form.intro)+'</p>';
     (form.fields||[]).forEach(function(fld){
       var val = existing && existing.data ? (existing.data[fld.id]||"") : "";
@@ -245,7 +255,7 @@
       var btn = document.getElementById("submitForm"); btn.disabled = true; btn.textContent = "שומר…";
 
       var save = function(signatureUrl){
-        var rec = { formTitle: form.title, data: data, confirmed: true, submittedAt: firebase.firestore.FieldValue.serverTimestamp(), email: currentUser.email };
+        var rec = { formTitle: form.title, data: data, confirmed: true, processNumber: participantData.processNumber || null, submittedAt: firebase.firestore.FieldValue.serverTimestamp(), email: currentUser.email };
         if (signatureUrl) rec.signatureUrl = signatureUrl;
         else if (existing && existing.signatureUrl) rec.signatureUrl = existing.signatureUrl;
         ref.set(rec, { merge: true }).then(function(){
@@ -269,6 +279,7 @@
     var html = backLink()+'<h1>'+esc(form.title)+'</h1><p class="lead">'+esc(form.subtitle||"")+'</p>';
     if (existing){ html += '<div class="alert alert-ok">הטופס נשמר ב-'+fmtDate(existing.submittedAt)+'. ניתן לעדכן ולשמור מחדש.</div>'; }
     html += '<div class="card">';
+    html += procNumberBlock();
     form.items.forEach(function(it){
       var v = data[it.id];
       if (it.type==='section'){ html += (it.level===3?'<h3>':'<h2>')+esc(it.label)+(it.level===3?'</h3>':'</h2>'); }
@@ -326,7 +337,7 @@
       }
       var btn=document.getElementById("submitForm"); btn.disabled=true; btn.textContent="שומר…";
       var finish=function(signatureUrl){
-        var rec={ formTitle:form.title, data:out, confirmed:true, submittedAt:firebase.firestore.FieldValue.serverTimestamp(), email:currentUser.email };
+        var rec={ formTitle:form.title, data:out, confirmed:true, processNumber: participantData.processNumber || null, submittedAt:firebase.firestore.FieldValue.serverTimestamp(), email:currentUser.email };
         if (signatureUrl) rec.signatureUrl=signatureUrl; else if (existing&&existing.signatureUrl) rec.signatureUrl=existing.signatureUrl;
         ref.set(rec,{merge:true}).then(function(){ db.collection("participants").doc(currentUser.uid).set({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); toast("נשמר בהצלחה","ok"); go(""); })
           .catch(function(err){ btn.disabled=false; btn.textContent="שמירה"; msg.innerHTML='<div class="alert alert-err">'+esc(err.message)+'</div>'; });
@@ -449,7 +460,7 @@
     html += '<h2>פירוט וקבצים לכל משתתף</h2>';
     parts.forEach(function(p){
       html += '<div class="card"><h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3>'+
-        '<div class="muted">עודכן: '+fmtDate(p.data.updatedAt)+' · הושלמו '+doneCount(p)+'/'+totalItems+'</div>'+
+        '<div class="muted">מספר תהליך: '+esc(p.data.processNumber||'—')+' · עודכן: '+fmtDate(p.data.updatedAt)+' · הושלמו '+doneCount(p)+'/'+totalItems+'</div>'+
         '<table class="tbl"><tr><th>פריט</th><th>סטטוס</th><th>קבצים</th></tr>';
       CFG.forms.forEach(function(f){ var fd=p.forms[f.id];
         html += '<tr><td>'+esc(f.title)+'</td><td>'+(fd?'<span class="badge badge-done">נחתם '+fmtDate(fd.submittedAt)+'</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+(fd&&fd.signatureUrl?'<a href="'+esc(fd.signatureUrl)+'" target="_blank">צפייה בחתימה</a>':'')+'</td></tr>';
