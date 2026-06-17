@@ -4,7 +4,7 @@
 window.APP_CONFIG = {
 
   // גרסת קבצים — נוספת לקישורי ההורדה כדי לעקוף קאש של הדפדפן. יש להעלות בכל החלפת קובץ.
-  assetVersion: "20260618a",
+  assetVersion: "20260618b",
 
   // כתובות המייל של חברי הוועדה שיקבלו גישת ניהול (רואים את כל המשתתפים).
   // יש להקפיד על אותיות קטנות.
@@ -33,12 +33,12 @@ window.APP_CONFIG = {
 
   // סדר הפריטים במסך ההסמכה (טאב 1). kind: form / upload / download.
   certItems: [
+    { kind: "download", file: "קוד המקצוע לייעוץ עסקי של לשכת היועצים העסקיים בישראל.pdf", title: "קוד המקצוע", desc: "מסמך קוד המקצוע של הלשכה (PDF) — להורדה ולקריאה" },
     { kind: "form", id: "selfAssessCompetence" },
     { kind: "form", id: "projectExperience" },
     { kind: "upload", id: "cv" },
     { kind: "upload", id: "certificates" },
     { kind: "upload", id: "clientRefs" },
-    { kind: "download", file: "קוד המקצוע לייעוץ עסקי של לשכת היועצים העסקיים בישראל.pdf", title: "קוד המקצוע", desc: "מסמך קוד המקצוע של הלשכה (PDF) — להורדה ולקריאה" },
     { kind: "form", id: "processUnderstanding" },
     { kind: "download", file: "תרגיל סופי להסמכה - יישום קוד המקצוע.docx", title: "תרגיל מסכם להסמכה", desc: "כתב המשימה של התרגיל המסכם (עבודת צוות 2-3) — להורדה" },
     { kind: "upload", id: "finalExercise" },
