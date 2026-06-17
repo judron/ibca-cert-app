@@ -1,5 +1,6 @@
-/* Service worker — network-first כדי שאף קובץ לא יישאר ישן (cache רק כגיבוי לאופליין). */
-var CACHE = "ibca-cert-v1";
+/* Service worker — network-first לקבצי האפליקציה בלבד.
+   קבצי הורדה (templates/) ובקשות שאינן GET עוברים ישירות לדפדפן, כדי שלא להפריע להורדות. */
+var CACHE = "ibca-cert-v2";
 
 self.addEventListener("install", function (e) {
   self.skipWaiting();
@@ -14,7 +15,10 @@ self.addEventListener("activate", function (e) {
 });
 
 self.addEventListener("fetch", function (e) {
-  if (e.request.method !== "GET") return;
+  var url;
+  try { url = new URL(e.request.url); } catch (err) { return; }
+  // אל תיגע בהורדות (templates/) או בבקשות שאינן GET — שהדפדפן יטפל בהן רגיל
+  if (e.request.method !== "GET" || url.pathname.indexOf("/templates/") !== -1) return;
   e.respondWith(
     fetch(e.request).then(function (resp) {
       try {
