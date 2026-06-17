@@ -4,7 +4,7 @@
 window.APP_CONFIG = {
 
   // גרסת קבצים — נוספת לקישורי ההורדה כדי לעקוף קאש של הדפדפן. יש להעלות בכל החלפת קובץ.
-  assetVersion: "20260617c",
+  assetVersion: "20260618a",
 
   // כתובות המייל של חברי הוועדה שיקבלו גישת ניהול (רואים את כל המשתתפים).
   // יש להקפיד על אותיות קטנות.
@@ -27,7 +27,8 @@ window.APP_CONFIG = {
   requiredUploads: [
     { id: "cv", title: "קורות חיים מפורטים", short: "קו״ח", desc: "כולל תיאורי פרויקטים להוכחת ניסיון ומומחיות" },
     { id: "certificates", title: "תעודות מקצועיות", short: "תעודות", desc: "ניתן להעלות כמה קבצים" },
-    { id: "clientRefs", title: "שלוש המלצות מלקוחות", short: "המלצות", desc: "מכתבי המלצה או פרטי ממליצים" }
+    { id: "clientRefs", title: "שלוש המלצות מלקוחות", short: "המלצות", desc: "מכתבי המלצה או פרטי ממליצים" },
+    { id: "finalExercise", title: "תרגיל מסכם (עבודת צוות)", short: "תרגיל מסכם", desc: "העלו את הקובץ הסופי של התרגיל המסכם. כל חבר צוות מעלה את הקובץ המשותף." }
   ],
 
   // סדר הפריטים במסך ההסמכה (טאב 1). kind: form / upload / download.
@@ -39,6 +40,8 @@ window.APP_CONFIG = {
     { kind: "upload", id: "clientRefs" },
     { kind: "download", file: "קוד המקצוע לייעוץ עסקי של לשכת היועצים העסקיים בישראל.pdf", title: "קוד המקצוע", desc: "מסמך קוד המקצוע של הלשכה (PDF) — להורדה ולקריאה" },
     { kind: "form", id: "processUnderstanding" },
+    { kind: "download", file: "תרגיל סופי להסמכה - יישום קוד המקצוע.docx", title: "תרגיל מסכם להסמכה", desc: "כתב המשימה של התרגיל המסכם (עבודת צוות 2-3) — להורדה" },
+    { kind: "upload", id: "finalExercise" },
     { kind: "form", id: "declaration" }
   ],
 
