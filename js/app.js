@@ -15,6 +15,8 @@
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
     return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function isAdmin(email){ return email && CFG.adminEmails.map(function(e){return e.toLowerCase();}).indexOf(email.toLowerCase()) !== -1; }
+  function emailKey(email){ return (email||"").trim().toLowerCase(); }
+  function appURL(){ return location.origin + location.pathname; }
   function setHTML(html){ appEl.innerHTML = html; }
   function go(hash){ location.hash = hash; }
   function fmtDate(ts){ try{ var d = ts && ts.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString("he-IL") + " " + d.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"}); }catch(e){ return ""; } }
@@ -69,19 +71,63 @@
       if (participantData.processNumber){
         return pref.set({ email: user.email, updatedAt: ts }, { merge: true });
       }
-      var cref = db.collection("counters").doc("process");
-      return db.runTransaction(function(tx){
+      // 1) try to claim a pre-registered number (assigned by the committee in the registry)
+      var rref = db.collection("registry").doc(emailKey(user.email));
+      return rref.get().catch(function(){ return null; }).then(function(rs){
+        if (rs && rs.exists && rs.data().processNumber){
+          var rd = rs.data();
+          participantData.processNumber = rd.processNumber;
+          return pref.set({ email: user.email, processNumber: rd.processNumber, name: rd.name || null, phone: rd.phone || null, updatedAt: ts }, { merge: true });
+        }
+        // 2) not pre-registered -> auto-assign the next number
+        var cref = db.collection("counters").doc("process");
+        return db.runTransaction(function(tx){
+          return tx.get(cref).then(function(cs){
+            var last = (cs.exists && cs.data().last) ? cs.data().last : 0;
+            var next = last + 1;
+            var pn = "IBCA-2026-" + pad3(next);
+            tx.set(cref, { last: next }, { merge: true });
+            tx.set(pref, { email: user.email, processNumber: pn, updatedAt: ts }, { merge: true });
+            participantData.processNumber = pn;
+            return pn;
+          });
+        });
+      });
+    }).catch(function(){});
+  }
+
+  // ----- committee: register a new member and assign the next number in order -----
+  function registerMember(name, email, phone, trainingDate){
+    var rref = db.collection("registry").doc(emailKey(email));
+    var cref = db.collection("counters").doc("process");
+    var ts = firebase.firestore.FieldValue.serverTimestamp();
+    return db.runTransaction(function(tx){
+      return tx.get(rref).then(function(rs){
+        if (rs.exists && rs.data().processNumber){
+          throw new Error("חבר עם המייל הזה כבר רשום (מספר " + rs.data().processNumber + ")");
+        }
         return tx.get(cref).then(function(cs){
           var last = (cs.exists && cs.data().last) ? cs.data().last : 0;
           var next = last + 1;
           var pn = "IBCA-2026-" + pad3(next);
           tx.set(cref, { last: next }, { merge: true });
-          tx.set(pref, { email: user.email, processNumber: pn, updatedAt: ts }, { merge: true });
-          participantData.processNumber = pn;
+          tx.set(rref, { name: name, email: emailKey(email), phone: phone || null, trainingDate: trainingDate || null, processNumber: pn, createdAt: ts }, { merge: true });
           return pn;
         });
       });
-    }).catch(function(){});
+    });
+  }
+
+  function inviteHref(person){
+    var url = appURL();
+    var subj = "הזמנה להסמכת קוד המקצוע · לשכת היועצים העסקיים והניהוליים";
+    var body = "שלום " + (person.name || "") + ",\n\n" +
+      "הוזמנת להשלים את תהליך הסמכת קוד המקצוע של הלשכה.\n" +
+      "מספר התהליך שלך: " + person.processNumber + "\n\n" +
+      "להתחברות: היכנס/י לקישור הבא, הזן/י את כתובת המייל הזו, ולחצ/י על קישור ההתחברות שיישלח אליך:\n" +
+      url + "\n\n" +
+      "בברכה,\nועדת קוד המקצוע · לשכת היועצים העסקיים והניהוליים בישראל";
+    return "mailto:" + encodeURIComponent(person.email) + "?subject=" + encodeURIComponent(subj) + "&body=" + encodeURIComponent(body);
   }
 
   /* ---------- login ---------- */
@@ -429,12 +475,22 @@
     }).then(function(){ toast("נמחק","ok"); viewDashboard(); });
   }
 
-  /* ---------- admin ---------- */
+  /* ---------- admin (committee console) ---------- */
+  function adminCols(){
+    return (CFG.certItems||[]).filter(function(i){ return i.kind==='form'||i.kind==='upload'; }).map(function(it){
+      if (it.kind==='form'){ var f=CFG.forms.filter(function(x){return x.id===it.id;})[0]; return {kind:'form', id:it.id, short:(f?(f.short||f.title):it.id), title:(f?f.title:it.id)}; }
+      var u=CFG.requiredUploads.filter(function(x){return x.id===it.id;})[0]; return {kind:'upload', id:it.id, short:(u?(u.short||u.title):it.id), title:(u?u.title:it.id)};
+    });
+  }
+
   function viewAdmin(){
     setHTML('<div class="loading">טוען נתוני משתתפים…</div>');
-    db.collection("participants").get().then(function(snap){
-      var parts = []; snap.forEach(function(d){ parts.push({uid:d.id, data:d.data()}); });
-      if (!parts.length){ setHTML(backLink()+'<h1>מסך הוועדה</h1><div class="card"><div class="alert alert-info">אין עדיין משתתפים רשומים.</div></div>'); return; }
+    Promise.all([
+      db.collection("registry").get(),
+      db.collection("participants").get()
+    ]).then(function(res){
+      var registry = []; res[0].forEach(function(d){ registry.push(d.data()); });
+      var parts = []; res[1].forEach(function(d){ parts.push({uid:d.id, data:d.data()}); });
       return Promise.all(parts.map(function(p){
         return Promise.all([
           db.collection("participants").doc(p.uid).collection("forms").get(),
@@ -444,50 +500,113 @@
           p.uploads = {}; r[1].forEach(function(d){ var u = d.data(); (p.uploads[u.itemId] = p.uploads[u.itemId] || []).push(u); });
           return p;
         });
-      })).then(renderAdmin);
-    }).catch(function(err){ setHTML(backLink()+'<div class="card"><div class="alert alert-err">שגיאה בטעינה (ודאו שכתובת המייל מוגדרת כמנהל בכללי האבטחה): '+esc(err.message)+'</div></div>'); });
+      })).then(function(parts2){ renderAdmin(registry, parts2); });
+    }).catch(function(err){ setHTML(backLink()+'<div class="card"><div class="alert alert-err">שגיאה בטעינה (ודאו שכתובת המייל מוגדרת כמנהל בכללי האבטחה, ושפורסמו כללי ה-registry): '+esc(err.message)+'</div></div>'); });
   }
 
-  function renderAdmin(parts){
-    var totalItems = CFG.forms.length + CFG.requiredUploads.length;
-    function doneCount(p){ var c=0; CFG.forms.forEach(function(f){ if(p.forms[f.id]) c++; }); CFG.requiredUploads.forEach(function(it){ if(p.uploads[it.id]) c++; }); return c; }
-    var fullyDone = parts.filter(function(p){ return doneCount(p)===totalItems; }).length;
+  function buildPeople(registry, parts){
+    var byEmail = {}; parts.forEach(function(p){ byEmail[emailKey(p.data.email)] = p; });
+    var used = {}, people = [];
+    registry.sort(function(a,b){ return String(a.processNumber||"").localeCompare(String(b.processNumber||"")); });
+    registry.forEach(function(r){
+      var p = byEmail[emailKey(r.email)]; if (p) used[p.uid] = true;
+      people.push({ processNumber:r.processNumber||(p&&p.data.processNumber)||"", name:r.name||(p&&p.data.name)||"", email:r.email,
+        phone:r.phone||"", trainingDate:r.trainingDate||"", registered:true, uid:p?p.uid:null, loggedIn:!!p,
+        forms:p?p.forms:{}, uploads:p?p.uploads:{}, updatedAt:p?p.data.updatedAt:null });
+    });
+    parts.forEach(function(p){
+      if (used[p.uid]) return;
+      people.push({ processNumber:p.data.processNumber||"", name:p.data.name||"", email:p.data.email||"",
+        phone:p.data.phone||"", trainingDate:"", registered:false, uid:p.uid, loggedIn:true,
+        forms:p.forms, uploads:p.uploads, updatedAt:p.data.updatedAt });
+    });
+    return people;
+  }
+
+  function renderAdmin(registry, parts){
+    var cols = adminCols(), totalItems = cols.length;
+    var people = buildPeople(registry, parts);
+    function doneCount(p){ var c=0; cols.forEach(function(col){ if(col.kind==='form'){ if(p.forms[col.id]) c++; } else { if((p.uploads[col.id]||[]).length) c++; } }); return c; }
+    var loggedIn = people.filter(function(p){ return p.loggedIn; }).length;
+    var fullyDone = people.filter(function(p){ return totalItems && doneCount(p)===totalItems; }).length;
+    var okC = '<span style="color:#2E7D32;font-weight:700">✓</span>';
+    var xC = '<span style="color:#C0392B">✗</span>';
 
     var html = backLink()+'<h1>מסך הוועדה</h1>'+
-      '<p class="lead">'+parts.length+' משתתפים · '+fullyDone+' השלימו את כל הפריטים.</p>';
+      '<p class="lead">'+people.length+' חברים רשומים · '+loggedIn+' התחברו · '+fullyDone+' השלימו את הכול.</p>';
+
+    // ----- registration form -----
+    html += '<div class="card"><h2 style="margin-top:0">רישום חבר חדש</h2>'+
+      '<p class="muted">בעת הרישום מוקצה אוטומטית מספר התהליך הבא בתור, לפי סדר ההזנה.</p>'+
+      '<div class="field"><label>שם מלא *</label><input id="reg_name" type="text" /></div>'+
+      '<div class="field"><label>כתובת מייל *</label><input id="reg_email" type="email" placeholder="name@example.com" /></div>'+
+      '<div class="field"><label>טלפון</label><input id="reg_phone" type="text" /></div>'+
+      '<div class="field"><label>תאריך הדרכה</label><input id="reg_date" type="text" placeholder="לדוגמה: 18/06/2026" /></div>'+
+      '<button class="btn btn-primary" id="regBtn">רישום והקצאת מספר</button><div id="regMsg" style="margin-top:8px"></div></div>';
+
+    // ----- members table with invite link -----
+    html += '<div class="card"><h2 style="margin-top:0">חברים רשומים</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
+      '<th>מס׳ תהליך</th><th>שם</th><th>מייל</th><th>טלפון</th><th>הדרכה</th><th style="text-align:center">סטטוס</th><th style="text-align:center">הושלם</th><th style="text-align:center">קישור</th></tr></thead><tbody>';
+    people.forEach(function(p){
+      var status = !p.loggedIn ? '<span class="badge badge-missing">טרם התחבר</span>' : (p.registered ? '<span class="badge badge-done">התחבר</span>' : '<span class="badge" style="background:#EEF1F5;color:#595959">נכנס ישירות</span>');
+      html += '<tr><td style="white-space:nowrap;font-weight:700;color:var(--navy)">'+esc(p.processNumber||'—')+'</td>'+
+        '<td style="white-space:nowrap">'+esc(p.name||'')+'</td><td style="white-space:nowrap">'+esc(p.email||'')+'</td>'+
+        '<td style="white-space:nowrap">'+esc(p.phone||'')+'</td><td style="white-space:nowrap">'+esc(p.trainingDate||'')+'</td>'+
+        '<td style="text-align:center">'+status+'</td>'+
+        '<td style="text-align:center;white-space:nowrap">'+doneCount(p)+'/'+totalItems+'</td>'+
+        '<td style="text-align:center"><a class="btn btn-sm btn-gold" href="'+inviteHref(p)+'">שליחת קישור</a></td></tr>';
+    });
+    html += '</tbody></table></div></div>';
 
     // ----- overview matrix: who submitted what -----
-    var okC = '<span style="color:#2E7D32;font-weight:700">✓</span>';
-    function xC(){ return '<span style="color:#C0392B">✗</span>'; }
-    html += '<div class="card"><h2 style="margin-top:0">סטטוס כללי — מי הגיש מה</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>משתתף</th>';
-    CFG.forms.forEach(function(f){ html += '<th style="text-align:center">'+esc(f.short||f.title)+'</th>'; });
-    CFG.requiredUploads.forEach(function(it){ html += '<th style="text-align:center">'+esc(it.short||it.title)+'</th>'; });
+    html += '<div class="card"><h2 style="margin-top:0">מי הגיש מה</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>חבר</th>';
+    cols.forEach(function(col){ html += '<th style="text-align:center">'+esc(col.short)+'</th>'; });
     html += '<th style="text-align:center">הושלם</th></tr></thead><tbody>';
-    parts.forEach(function(p){
-      html += '<tr><td style="white-space:nowrap">'+esc(p.data.email||p.uid)+'</td>';
-      CFG.forms.forEach(function(f){ html += '<td style="text-align:center">'+(p.forms[f.id]?okC:xC())+'</td>'; });
-      CFG.requiredUploads.forEach(function(it){ var n=(p.uploads[it.id]||[]).length; html += '<td style="text-align:center">'+(n?(okC+(n>1?' '+n:'')):xC())+'</td>'; });
+    people.forEach(function(p){
+      html += '<tr><td style="white-space:nowrap">'+esc(p.name||p.email||'—')+'</td>';
+      cols.forEach(function(col){
+        if (col.kind==='form'){ html += '<td style="text-align:center">'+(p.forms[col.id]?okC:xC)+'</td>'; }
+        else { var n=(p.uploads[col.id]||[]).length; html += '<td style="text-align:center">'+(n?(okC+(n>1?' '+n:'')):xC)+'</td>'; }
+      });
       html += '<td style="text-align:center;white-space:nowrap">'+doneCount(p)+'/'+totalItems+'</td></tr>';
     });
     html += '</tbody></table></div></div>';
 
-    // ----- per-participant detail with file links -----
-    html += '<h2>פירוט וקבצים לכל משתתף</h2>';
-    parts.forEach(function(p){
-      html += '<div class="card"><h3 style="margin-top:0">'+esc(p.data.email||p.uid)+'</h3>'+
-        '<div class="muted">מספר תהליך: '+esc(p.data.processNumber||'—')+' · עודכן: '+fmtDate(p.data.updatedAt)+' · הושלמו '+doneCount(p)+'/'+totalItems+'</div>'+
-        '<table class="tbl"><tr><th>פריט</th><th>סטטוס</th><th>קבצים</th></tr>';
-      CFG.forms.forEach(function(f){ var fd=p.forms[f.id];
-        html += '<tr><td>'+esc(f.title)+'</td><td>'+(fd?'<span class="badge badge-done">נחתם '+fmtDate(fd.submittedAt)+'</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+(fd&&fd.signatureUrl?'<a href="'+esc(fd.signatureUrl)+'" target="_blank">צפייה בחתימה</a>':'')+'</td></tr>';
-      });
-      CFG.requiredUploads.forEach(function(it){ var arr=p.uploads[it.id]||[];
-        var links=arr.map(function(u){ return '<a href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>'; }).join('<br>');
-        html += '<tr><td>'+esc(it.title)+'</td><td>'+(arr.length?'<span class="badge badge-done">'+arr.length+' קבצים</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+links+'</td></tr>';
-      });
-      html += '</table></div>';
+    // ----- per-member detail with file links (only those who logged in) -----
+    html += '<h2>פירוט וקבצים לכל חבר</h2>';
+    people.forEach(function(p){
+      html += '<div class="card"><h3 style="margin-top:0">'+esc(p.name||p.email||'—')+'</h3>'+
+        '<div class="muted">מספר תהליך: '+esc(p.processNumber||'—')+' · '+esc(p.email||'')+(p.loggedIn?(' · עודכן: '+fmtDate(p.updatedAt)):' · טרם התחבר')+' · הושלמו '+doneCount(p)+'/'+totalItems+'</div>';
+      if (p.loggedIn){
+        html += '<table class="tbl"><tr><th>פריט</th><th>סטטוס</th><th>קבצים</th></tr>';
+        cols.forEach(function(col){
+          if (col.kind==='form'){ var fd=p.forms[col.id];
+            html += '<tr><td>'+esc(col.title)+'</td><td>'+(fd?'<span class="badge badge-done">נחתם '+fmtDate(fd.submittedAt)+'</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+(fd&&fd.signatureUrl?'<a href="'+esc(fd.signatureUrl)+'" target="_blank">צפייה בחתימה</a>':'')+'</td></tr>';
+          } else { var arr=p.uploads[col.id]||[];
+            var links=arr.map(function(u){ return '<a href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>'; }).join('<br>');
+            html += '<tr><td>'+esc(col.title)+'</td><td>'+(arr.length?'<span class="badge badge-done">'+arr.length+' קבצים</span>':'<span class="badge badge-missing">חסר</span>')+'</td><td>'+links+'</td></tr>';
+          }
+        });
+        html += '</table>';
+      }
+      html += '</div>';
     });
 
     setHTML(html);
+
+    var rb = document.getElementById("regBtn");
+    if (rb){ rb.onclick = function(){
+      var msg = document.getElementById("regMsg");
+      var name=(document.getElementById("reg_name").value||"").trim();
+      var email=(document.getElementById("reg_email").value||"").trim();
+      var phone=(document.getElementById("reg_phone").value||"").trim();
+      var date=(document.getElementById("reg_date").value||"").trim();
+      if (!name || !email || email.indexOf("@")===-1){ msg.innerHTML='<div class="alert alert-err">נא למלא שם וכתובת מייל תקינה.</div>'; return; }
+      rb.disabled=true; rb.textContent="רושם…";
+      registerMember(name,email,phone,date).then(function(pn){
+        toast("נרשם בהצלחה · מספר "+pn,"ok"); viewAdmin();
+      }).catch(function(err){ rb.disabled=false; rb.textContent="רישום והקצאת מספר"; msg.innerHTML='<div class="alert alert-err">'+esc(err.message)+'</div>'; });
+    }; }
   }
 
   init();

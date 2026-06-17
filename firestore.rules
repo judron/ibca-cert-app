@@ -25,5 +25,14 @@ service cloud.firestore {
     match /counters/{doc} {
       allow read, write: if request.auth != null;
     }
+
+    // registry: committee pre-registers members and assigns numbers.
+    // a member may read only their own entry (to claim their number on first login).
+    match /registry/{emailId} {
+      allow get: if request.auth != null &&
+        (isAdmin() || resource == null || resource.data.email == request.auth.token.email);
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
