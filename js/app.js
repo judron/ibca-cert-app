@@ -172,7 +172,8 @@
     if (h === "templates") return viewTemplates();
     if (h === "upload") return viewDashboard();
     if (h === "admin") return isAdmin(currentUser.email) ? viewAdmin() : viewDashboard();
-    return viewDashboard();
+    if (h === "me") return viewDashboard();
+    return isAdmin(currentUser.email) ? viewAdmin() : viewDashboard();
   }
   function backLink(){ return '<a class="back" href="#/">→ חזרה לעמוד הראשי</a>'; }
   function procNumberBlock(){ return '<div class="field"><label>מספר תהליך (מלווה אתכם לאורך התהליך, ויהפוך למספר ההסמכה עם קבלת התעודה)</label><div style="font-weight:700;color:#1F3864;font-size:18px">'+esc(participantData.processNumber||"")+'</div></div>'; }
@@ -532,8 +533,9 @@
     var okC = '<span style="color:#2E7D32;font-weight:700">✓</span>';
     var xC = '<span style="color:#C0392B">✗</span>';
 
-    var html = backLink()+'<h1>מסך הוועדה</h1>'+
-      '<p class="lead">'+people.length+' חברים רשומים · '+loggedIn+' התחברו · '+fullyDone+' השלימו את הכול.</p>';
+    var html = '<h1>מסך הוועדה</h1>'+
+      '<p class="lead">'+people.length+' חברים רשומים · '+loggedIn+' התחברו · '+fullyDone+' השלימו את הכול.</p>'+
+      '<p class="muted" style="margin-top:-6px"><a href="#/me">תצוגת המשתתף (האזור האישי) ←</a></p>';
 
     // ----- registration form -----
     html += '<div class="card"><h2 style="margin-top:0">רישום חבר חדש</h2>'+
