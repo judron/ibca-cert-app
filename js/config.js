@@ -228,6 +228,69 @@ window.APP_CONFIG = {
         { type: "statement", text: "התמקדות במתן ערך בר-קיימא ללקוח" },
         { type: "statement", text: "איזון בין תועלות קצרות טווח וארוכות טווח" }
       ]
+    },
+
+    {
+      id: "projectExperience",
+      title: "תיאור פרויקטי ייעוץ",
+      short: "פרויקטים",
+      subtitle: "תיאור קצר של פרויקטים מייצגים להוכחת הניסיון המקצועי. ניתן לשמור ולעדכן בכל עת.",
+      requireSignature: true,
+      confirmText: "המידע המוצג נכון ומדויק, שמרתי על סודיות הלקוחות והסרתי כל פרט מזהה, והפרויקטים מייצגים את עבודתי המקצועית האישית.",
+      items: [
+        { type: "info", text: "תארו 2–3 פרויקטים מייצגים מהשנים האחרונות, שמדגימים את הניסיון שלכם ואת סוגי הפרויקטים שאתם מבצעים. אין צורך בפירוט מתודולוגי. חשוב: השמיטו כל פרט שעלול לזהות את הלקוח או לפגוע בסודיות עסקית." },
+        { type: "section", label: "פרטים אישיים" },
+        { type: "text", id: "fullName", label: "שם מלא", required: true },
+        { type: "text", id: "yearsExp", label: "שנות ניסיון בייעוץ" },
+
+        { type: "section", label: "פרויקט 1" },
+        { type: "text", id: "p1_name", label: "שם קודי לפרויקט (ללא פרטים מזהים)", required: true },
+        { type: "text", id: "p1_sector", label: "ענף / תחום הלקוח" },
+        { type: "text", id: "p1_period", label: "תקופת ביצוע ומשך (לדוגמה: 03/2024–09/2024, 6 חודשים)" },
+        { type: "checkboxes", id: "p1_role", label: "תפקידך בפרויקט:", other: true, options: ["יועץ ראשי / מנהל פרויקט","יועץ בכיר בצוות","יועץ מומחה בתחום ספציפי"] },
+        { type: "textarea", id: "p1_desc", label: "תיאור הפרויקט וההישגים המרכזיים (כולל תוצאות מדידות, אם יש)", required: true },
+        { type: "info", text: "פרטו 2–3 אתגרים מרכזיים בפרויקט ואת הפתרון שהצעתם לכל אחד:" },
+        { type: "textarea", id: "p1_ch1", label: "אתגר מרכזי 1" },
+        { type: "textarea", id: "p1_sol1", label: "הפתרון שהוצע לאתגר 1" },
+        { type: "textarea", id: "p1_ch2", label: "אתגר מרכזי 2" },
+        { type: "textarea", id: "p1_sol2", label: "הפתרון שהוצע לאתגר 2" },
+        { type: "textarea", id: "p1_ch3", label: "אתגר מרכזי 3 (אופציונלי)" },
+        { type: "textarea", id: "p1_sol3", label: "הפתרון שהוצע לאתגר 3 (אופציונלי)" },
+
+        { type: "section", label: "פרויקט 2" },
+        { type: "text", id: "p2_name", label: "שם קודי לפרויקט (ללא פרטים מזהים)" },
+        { type: "text", id: "p2_sector", label: "ענף / תחום הלקוח" },
+        { type: "text", id: "p2_period", label: "תקופת ביצוע ומשך (לדוגמה: 03/2024–09/2024, 6 חודשים)" },
+        { type: "checkboxes", id: "p2_role", label: "תפקידך בפרויקט:", other: true, options: ["יועץ ראשי / מנהל פרויקט","יועץ בכיר בצוות","יועץ מומחה בתחום ספציפי"] },
+        { type: "textarea", id: "p2_desc", label: "תיאור הפרויקט וההישגים המרכזיים (כולל תוצאות מדידות, אם יש)" },
+        { type: "info", text: "פרטו 2–3 אתגרים מרכזיים בפרויקט ואת הפתרון שהצעתם לכל אחד:" },
+        { type: "textarea", id: "p2_ch1", label: "אתגר מרכזי 1" },
+        { type: "textarea", id: "p2_sol1", label: "הפתרון שהוצע לאתגר 1" },
+        { type: "textarea", id: "p2_ch2", label: "אתגר מרכזי 2" },
+        { type: "textarea", id: "p2_sol2", label: "הפתרון שהוצע לאתגר 2" },
+        { type: "textarea", id: "p2_ch3", label: "אתגר מרכזי 3 (אופציונלי)" },
+        { type: "textarea", id: "p2_sol3", label: "הפתרון שהוצע לאתגר 3 (אופציונלי)" },
+
+        { type: "section", label: "פרויקט 3 (אופציונלי)" },
+        { type: "text", id: "p3_name", label: "שם קודי לפרויקט (ללא פרטים מזהים)" },
+        { type: "text", id: "p3_sector", label: "ענף / תחום הלקוח" },
+        { type: "text", id: "p3_period", label: "תקופת ביצוע ומשך (לדוגמה: 03/2024–09/2024, 6 חודשים)" },
+        { type: "checkboxes", id: "p3_role", label: "תפקידך בפרויקט:", other: true, options: ["יועץ ראשי / מנהל פרויקט","יועץ בכיר בצוות","יועץ מומחה בתחום ספציפי"] },
+        { type: "textarea", id: "p3_desc", label: "תיאור הפרויקט וההישגים המרכזיים (כולל תוצאות מדידות, אם יש)" },
+        { type: "info", text: "פרטו 2–3 אתגרים מרכזיים בפרויקט ואת הפתרון שהצעתם לכל אחד:" },
+        { type: "textarea", id: "p3_ch1", label: "אתגר מרכזי 1" },
+        { type: "textarea", id: "p3_sol1", label: "הפתרון שהוצע לאתגר 1" },
+        { type: "textarea", id: "p3_ch2", label: "אתגר מרכזי 2" },
+        { type: "textarea", id: "p3_sol2", label: "הפתרון שהוצע לאתגר 2" },
+        { type: "textarea", id: "p3_ch3", label: "אתגר מרכזי 3 (אופציונלי)" },
+        { type: "textarea", id: "p3_sol3", label: "הפתרון שהוצע לאתגר 3 (אופציונלי)" },
+
+        { type: "section", label: "סיכום ניסיון וסוגי פרויקטים" },
+        { type: "checkboxes", id: "expertiseAreas", label: "תחומי התמחות שהוכחת בפרויקטים (סמנו):", other: true, options: ["ניהול אסטרטגי","שיפור תהליכים","ניהול שינוי","משאבי אנוש","פיננסים וכלכלה","שיווק ומכירות","טכנולוגיה ודיגיטל"] },
+        { type: "checkboxes", id: "orgTypes", label: "סוגי ארגונים שעבדת איתם (סמנו):", other: true, options: ["סטארט-אפים ועסקים קטנים","חברות בינוניות","תאגידים גדולים","מגזר ציבורי","מלכ\"רים"] },
+        { type: "textarea", id: "proudest", label: "הישג מקצועי שאתה/את הכי גאה בו" },
+        { type: "section", label: "הצהרה" }
+      ]
     }
   ]
 };
