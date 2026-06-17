@@ -35,8 +35,8 @@ window.APP_CONFIG = {
     { kind: "upload", id: "certificates" },
     { kind: "upload", id: "clientRefs" },
     { kind: "download", file: "קוד המקצוע לייעוץ עסקי של לשכת היועצים העסקיים בישראל.pdf", title: "קוד המקצוע", desc: "מסמך קוד המקצוע של הלשכה (PDF) — להורדה ולקריאה" },
-    { kind: "form", id: "declaration" },
-    { kind: "form", id: "processUnderstanding" }
+    { kind: "form", id: "processUnderstanding" },
+    { kind: "form", id: "declaration" }
   ],
 
   // טפסים שממלאים וחותמים בתוך האפליקציה.
