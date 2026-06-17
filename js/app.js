@@ -124,14 +124,22 @@
     var h = location.hash.replace(/^#\/?/, "");
     if (h.indexOf("form/") === 0) return viewForm(h.split("/")[1]);
     if (h === "templates") return viewTemplates();
-    if (h === "upload") return viewUpload();
+    if (h === "upload") return viewDashboard();
     if (h === "admin") return isAdmin(currentUser.email) ? viewAdmin() : viewDashboard();
     return viewDashboard();
   }
   function backLink(){ return '<a class="back" href="#/">→ חזרה לעמוד הראשי</a>'; }
   function procNumberBlock(){ return '<div class="field"><label>מספר תהליך (מלווה אתכם לאורך התהליך, ויהפוך למספר ההסמכה עם קבלת התעודה)</label><div style="font-weight:700;color:#1F3864;font-size:18px">'+esc(participantData.processNumber||"")+'</div></div>'; }
 
-  /* ---------- dashboard ---------- */
+  /* ---------- tab bar ---------- */
+  function tabBar(active){
+    return '<div class="tabbar">'+
+      '<a class="tab'+(active==='cert'?' tab-active':'')+'" href="#/">הסמכה</a>'+
+      '<a class="tab'+(active==='templates'?' tab-active':'')+'" href="#/templates">תבניות להורדה</a>'+
+      '</div>';
+  }
+
+  /* ---------- Tab 1 — מסך ההסמכה (טפסים + העלאות + הורדת הקוד) ---------- */
   function viewDashboard(){
     setHTML('<div class="loading">טוען…</div>');
     var uid = currentUser.uid;
@@ -140,14 +148,17 @@
       db.collection("participants").doc(uid).collection("uploads").get()
     ]).then(function(res){
       var doneForms = {}; res[0].forEach(function(d){ doneForms[d.id] = d.data(); });
-      var uploadsByItem = {}; res[1].forEach(function(d){ var u=d.data(); (uploadsByItem[u.itemId]=uploadsByItem[u.itemId]||[]).push(u); });
+      var uploadsByItem = {}; res[1].forEach(function(d){ var u=d.data(); u._id=d.id; (uploadsByItem[u.itemId]=uploadsByItem[u.itemId]||[]).push(u); });
 
-      var totalItems = CFG.forms.length + CFG.requiredUploads.length;
-      var doneCount = Object.keys(doneForms).length + CFG.requiredUploads.filter(function(it){ return uploadsByItem[it.id]; }).length;
+      var items = CFG.certItems || [];
+      var required = items.filter(function(it){ return it.kind==='form' || it.kind==='upload'; });
+      var doneCount = required.filter(function(it){ return it.kind==='form' ? !!doneForms[it.id] : !!uploadsByItem[it.id]; }).length;
+      var totalItems = required.length;
       var pct = totalItems ? Math.round(doneCount/totalItems*100) : 0;
 
-      var html = '<h1>שלום, '+esc(currentUser.email)+'</h1>'+
-        '<p class="lead">זהו המרחב האישי שלכם בתהליך ההסמכה. כאן ממלאים, מורידים ומעלים את המסמכים הנדרשים.</p>'+
+      var html = tabBar('cert')+
+        '<h1>שלום, '+esc(currentUser.email)+'</h1>'+
+        '<p class="lead">זהו המרחב האישי שלכם בתהליך ההסמכה. כאן ממלאים את הטפסים, מורידים את קוד המקצוע ומעלים את המסמכים הנדרשים.</p>'+
         '<div class="card" style="padding:12px 16px"><span class="muted">מספר תהליך:</span> <strong style="color:var(--navy)">'+esc(participantData.processNumber||"")+'</strong> '+
         '<span class="muted" style="font-size:12px">(מלווה אתכם לאורך התהליך, ויהפוך למספר ההסמכה עם קבלת התעודה)</span></div>';
 
@@ -158,38 +169,57 @@
       html += '<div class="card"><h3>התקדמות אישית</h3><div class="progress"><span style="width:'+pct+'%"></span></div>'+
         '<div class="muted">'+doneCount+' מתוך '+totalItems+' פריטים הושלמו</div></div>';
 
-      html += '<div class="grid">'+
-        tile("#/form/declaration","✍️","מילוי וחתימה","למלא ולחתום על כתב ההתחייבות")+
-        tile("#/templates","⬇️","הורדת תבניות","להוריד את המסמכים למילוי")+
-        tile("#/upload","⬆️","העלאת מסמכים","להעלות את הקבצים הנדרשים")+
-        '</div>';
-
-      // checklist
-      html += '<div class="card"><h2 style="margin-top:0">רשימת המשימות שלי</h2>';
-      CFG.forms.forEach(function(f){
-        var done = !!doneForms[f.id];
-        html += itemRow(f.title, "טופס למילוי וחתימה באפליקציה", done, done?("נחתם "+fmtDate(doneForms[f.id].submittedAt)) : null, "#/form/"+f.id, done?"לצפייה/עריכה":"למילוי");
+      items.forEach(function(it){
+        if (it.kind==='form'){
+          var f = CFG.forms.filter(function(x){return x.id===it.id;})[0]; if(!f) return;
+          var done = !!doneForms[f.id];
+          html += '<div class="card"><div class="item-row" style="padding-top:0">'+
+            '<div class="item-main"><span class="dot '+(done?"dot-done":"dot-missing")+'"></span>'+
+            '<div><div class="item-title">'+esc(f.title)+'</div><div class="item-desc">'+esc(done?("נחתם "+fmtDate(doneForms[f.id].submittedAt)):(f.subtitle||"טופס למילוי וחתימה באפליקציה"))+'</div></div></div>'+
+            '<div><span class="badge '+(done?"badge-done":"badge-missing")+'">'+(done?"הושלם":"למילוי")+'</span> '+
+            '<a class="btn btn-sm btn-outline" href="#/form/'+f.id+'">'+(done?"לצפייה/עריכה":"למילוי")+'</a></div></div></div>';
+        }
+        else if (it.kind==='upload'){
+          var item = CFG.requiredUploads.filter(function(x){return x.id===it.id;})[0]; if(!item) return;
+          var arr = uploadsByItem[item.id]||[];
+          html += '<div class="card"><div class="item-row" style="padding-top:0">'+
+            '<div class="item-main"><span class="dot '+(arr.length?"dot-done":"dot-missing")+'"></span>'+
+            '<div><div class="item-title">'+esc(item.title)+'</div><div class="item-desc">'+esc(item.desc)+'</div></div></div>'+
+            '<label class="btn btn-sm btn-gold">העלאת קובץ<input type="file" data-item="'+item.id+'" hidden></label></div>';
+          if (arr.length){ html += '<div style="margin-top:8px">'; arr.forEach(function(u){
+            html += '<div class="file-row"><a class="file-name" href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>'+
+              '<button class="btn btn-sm btn-outline" data-del="'+u._id+'" data-path="'+esc(u.path)+'">מחיקה</button></div>';
+          }); html += '</div>'; }
+          html += '<div class="upmsg" data-msg="'+item.id+'"></div></div>';
+        }
+        else if (it.kind==='download'){
+          var href = "templates/" + encodeURIComponent(it.file);
+          html += '<div class="card"><div class="item-row" style="padding-top:0">'+
+            '<div class="item-main"><span class="dot dot-info"></span>'+
+            '<div><div class="item-title">'+esc(it.title)+'</div><div class="item-desc">'+esc(it.desc||"")+'</div></div></div>'+
+            '<a class="btn btn-sm btn-gold" href="'+href+'" download>הורדה</a></div></div>';
+        }
       });
-      CFG.requiredUploads.forEach(function(it){
-        var arr = uploadsByItem[it.id]; var done = !!arr;
-        html += itemRow(it.title, it.desc, done, done?(arr.length+" קבצים הועלו"):null, "#/upload", done?"לניהול":"להעלאה");
-      });
-      html += '</div>';
 
       setHTML(html);
+      wireUploads();
     }).catch(function(err){ setHTML('<div class="card"><div class="alert alert-err">שגיאה בטעינה: '+esc(err.message)+'</div></div>'); });
   }
-  function tile(href,ic,t,d){ return '<a class="tile" href="'+href+'"><div class="tile-ic">'+ic+'</div><div class="tile-t">'+esc(t)+'</div><div class="tile-d">'+esc(d)+'</div></a>'; }
-  function itemRow(title, desc, done, sub, href, action){
-    return '<div class="item-row"><div class="item-main"><span class="dot '+(done?"dot-done":"dot-missing")+'"></span>'+
-      '<div><div class="item-title">'+esc(title)+'</div><div class="item-desc">'+esc(sub||desc)+'</div></div></div>'+
-      '<div><span class="badge '+(done?"badge-done":"badge-missing")+'">'+(done?"הושלם":"חסר")+'</span> '+
-      '<a class="btn btn-sm btn-outline" href="'+href+'">'+esc(action)+'</a></div></div>';
+
+  function wireUploads(){
+    Array.prototype.forEach.call(document.querySelectorAll('input[type=file]'), function(inp){
+      inp.onchange = function(){ if (inp.files[0]) { doUpload(inp.getAttribute("data-item"), inp.files[0]); inp.value=""; } };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('button[data-del]'), function(b){
+      b.onclick = function(){ if (confirm("למחוק את הקובץ?")) doDelete(b.getAttribute("data-del"), b.getAttribute("data-path")); };
+    });
   }
 
-  /* ---------- templates ---------- */
+  /* ---------- Tab 2 — תבניות להורדה (רשות) ---------- */
   function viewTemplates(){
-    var html = backLink()+'<h1>הורדת תבניות</h1><p class="lead">הורידו את המסמכים, מלאו אותם, וחזרו להעלות במסך "העלאת מסמכים".</p><div class="card">';
+    var html = tabBar('templates')+'<h1>תבניות להורדה</h1>';
+    if (CFG.templatesIntro){ html += '<div class="alert alert-info">'+esc(CFG.templatesIntro)+'</div>'; }
+    html += '<div class="card">';
     CFG.templates.forEach(function(t){
       var href = "templates/" + encodeURIComponent(t.file);
       html += '<div class="file-row"><div><div class="file-name">'+esc(t.title)+'</div><div class="item-desc">'+esc(t.desc)+'</div></div>'+
@@ -378,35 +408,7 @@
     this.toDataURL=function(){ return canvas.toDataURL("image/png"); };
   }
 
-  /* ---------- upload ---------- */
-  function viewUpload(){
-    setHTML('<div class="loading">טוען…</div>');
-    var col = db.collection("participants").doc(currentUser.uid).collection("uploads");
-    col.get().then(function(snap){
-      var byItem = {}; snap.forEach(function(d){ var u=d.data(); u._id=d.id; (byItem[u.itemId]=byItem[u.itemId]||[]).push(u); });
-      var html = backLink()+'<h1>העלאת מסמכים</h1><p class="lead">העלו את הקבצים הנדרשים. ניתן להעלות מספר קבצים לכל פריט (PDF, Word, תמונה).</p>';
-      CFG.requiredUploads.forEach(function(it){
-        var arr = byItem[it.id]||[];
-        html += '<div class="card"><div class="item-row" style="padding-top:0">'+
-          '<div class="item-main"><span class="dot '+(arr.length?"dot-done":"dot-missing")+'"></span>'+
-          '<div><div class="item-title">'+esc(it.title)+'</div><div class="item-desc">'+esc(it.desc)+'</div></div></div>'+
-          '<label class="btn btn-sm btn-gold">העלאת קובץ<input type="file" data-item="'+it.id+'" hidden></label></div>';
-        if (arr.length){ html += '<div style="margin-top:8px">'; arr.forEach(function(u){
-          html += '<div class="file-row"><a class="file-name" href="'+esc(u.url)+'" target="_blank">'+esc(u.fileName)+'</a>'+
-            '<button class="btn btn-sm btn-outline" data-del="'+u._id+'" data-path="'+esc(u.path)+'">מחיקה</button></div>';
-        }); html += '</div>'; }
-        html += '<div class="upmsg" data-msg="'+it.id+'"></div></div>';
-      });
-      setHTML(html);
-
-      Array.prototype.forEach.call(document.querySelectorAll('input[type=file]'), function(inp){
-        inp.onchange = function(){ if (inp.files[0]) { doUpload(inp.getAttribute("data-item"), inp.files[0]); inp.value=""; } };
-      });
-      Array.prototype.forEach.call(document.querySelectorAll('button[data-del]'), function(b){
-        b.onclick = function(){ if (confirm("למחוק את הקובץ?")) doDelete(b.getAttribute("data-del"), b.getAttribute("data-path")); };
-      });
-    }).catch(function(err){ setHTML(backLink()+'<div class="card"><div class="alert alert-err">שגיאה בטעינה: '+esc(err.message)+'</div></div>'); });
-  }
+  /* ---------- upload actions (inline in Tab 1) ---------- */
   function doUpload(itemId, file){
     var msg = document.querySelector('.upmsg[data-msg="'+itemId+'"]');
     msg.innerHTML = '<div class="alert alert-info">מעלה… 0%</div>';
@@ -418,13 +420,13 @@
         return db.collection("participants").doc(currentUser.uid).collection("uploads").add({
           itemId:itemId, fileName:file.name, path:path, url:url, size:file.size, uploadedAt:firebase.firestore.FieldValue.serverTimestamp(), email:currentUser.email
         });
-      }).then(function(){ db.collection("participants").doc(currentUser.uid).set({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); toast("הקובץ הועלה","ok"); viewUpload(); })
+      }).then(function(){ db.collection("participants").doc(currentUser.uid).set({updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}); toast("הקובץ הועלה","ok"); viewDashboard(); })
         .catch(function(err){ msg.innerHTML='<div class="alert alert-err">העלאה נכשלה: '+esc(err.message)+'</div>'; }); });
   }
   function doDelete(docId, path){
     storage.ref(path).delete().catch(function(){}).then(function(){
       return db.collection("participants").doc(currentUser.uid).collection("uploads").doc(docId).delete();
-    }).then(function(){ toast("נמחק","ok"); viewUpload(); });
+    }).then(function(){ toast("נמחק","ok"); viewDashboard(); });
   }
 
   /* ---------- admin ---------- */

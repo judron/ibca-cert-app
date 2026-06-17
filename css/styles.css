@@ -70,7 +70,13 @@ h3{color:var(--navy2); font-size:16px; margin:16px 0 6px}
 .badge-missing{background:#FDECEA; color:var(--warn)}
 .badge-optional{background:#EEF1F5; color:var(--grey)}
 .dot{width:10px; height:10px; border-radius:50%; flex:none}
-.dot-done{background:var(--ok)} .dot-missing{background:var(--warn)}
+.dot-done{background:var(--ok)} .dot-missing{background:var(--warn)} .dot-info{background:var(--gold)}
+
+/* tab bar */
+.tabbar{display:flex; gap:8px; margin-bottom:18px; border-bottom:2px solid var(--gold-soft)}
+.tab{padding:10px 20px; text-decoration:none; color:var(--navy2); font-weight:600; border:1px solid transparent; border-bottom:none; border-radius:10px 10px 0 0; margin-bottom:-2px}
+.tab:hover{background:#fff}
+.tab-active{background:#fff; color:var(--navy); border-color:var(--gold-soft); border-bottom:2px solid #fff}
 
 /* nav tiles */
 .tile{display:block; text-decoration:none; color:inherit; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); transition:.15s}
