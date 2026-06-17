@@ -193,7 +193,7 @@
           html += '<div class="upmsg" data-msg="'+item.id+'"></div></div>';
         }
         else if (it.kind==='download'){
-          var href = "templates/" + encodeURIComponent(it.file);
+          var href = "templates/" + encodeURIComponent(it.file) + "?v=" + encodeURIComponent(CFG.assetVersion||"1");
           html += '<div class="card"><div class="item-row" style="padding-top:0">'+
             '<div class="item-main"><span class="dot dot-info"></span>'+
             '<div><div class="item-title">'+esc(it.title)+'</div><div class="item-desc">'+esc(it.desc||"")+'</div></div></div>'+
@@ -221,7 +221,7 @@
     if (CFG.templatesIntro){ html += '<div class="alert alert-info">'+esc(CFG.templatesIntro)+'</div>'; }
     html += '<div class="card">';
     CFG.templates.forEach(function(t){
-      var href = "templates/" + encodeURIComponent(t.file);
+      var href = "templates/" + encodeURIComponent(t.file) + "?v=" + encodeURIComponent(CFG.assetVersion||"1");
       html += '<div class="file-row"><div><div class="file-name">'+esc(t.title)+'</div><div class="item-desc">'+esc(t.desc)+'</div></div>'+
         '<a class="btn btn-sm btn-gold" href="'+href+'" download>הורדה</a></div>';
     });
