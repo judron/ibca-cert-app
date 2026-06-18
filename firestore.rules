@@ -34,5 +34,12 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update, delete: if isAdmin();
     }
+
+    // approvals: only the committee writes; a member may read their own (to download the certificate).
+    match /approvals/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }

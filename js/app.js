@@ -192,10 +192,12 @@
     var uid = currentUser.uid;
     Promise.all([
       db.collection("participants").doc(uid).collection("forms").get(),
-      db.collection("participants").doc(uid).collection("uploads").get()
+      db.collection("participants").doc(uid).collection("uploads").get(),
+      db.collection("approvals").doc(uid).get().catch(function(){ return null; })
     ]).then(function(res){
       var doneForms = {}; res[0].forEach(function(d){ doneForms[d.id] = d.data(); });
       var uploadsByItem = {}; res[1].forEach(function(d){ var u=d.data(); u._id=d.id; (uploadsByItem[u.itemId]=uploadsByItem[u.itemId]||[]).push(u); });
+      var approval = (res[2] && res[2].exists) ? res[2].data() : null;
 
       var items = CFG.certItems || [];
       var required = items.filter(function(it){ return it.kind==='form' || it.kind==='upload'; });
@@ -215,6 +217,13 @@
 
       html += '<div class="card"><h3>התקדמות אישית</h3><div class="progress"><span style="width:'+pct+'%"></span></div>'+
         '<div class="muted">'+doneCount+' מתוך '+totalItems+' פריטים הושלמו</div></div>';
+
+      if (approval && approval.approved){
+        html += '<div class="card" style="border:1.5px solid var(--gold);background:#FBF7EF">'+
+          '<h3 style="margin-top:0;color:var(--navy)">🎓 ההסמכה שלך אושרה</h3>'+
+          '<p class="muted" style="margin-bottom:12px">הוועדה אישרה את הסמכתך. ניתן להוריד את התעודה כ-PDF להדפסה או להעלאה לאתר שלך.</p>'+
+          '<button class="btn btn-gold" id="dlCert">הורדת תעודה (PDF)</button></div>';
+      }
 
       items.forEach(function(it){
         if (it.kind==='form'){
@@ -250,6 +259,10 @@
 
       setHTML(html);
       wireUploads();
+      var dc = document.getElementById("dlCert");
+      if (dc && approval){ dc.onclick = function(){
+        downloadCert(approval.name || participantData.name || currentUser.email, approval.processNumber || participantData.processNumber || "", fmtDay(approval.approvedAt));
+      }; }
     }).catch(function(err){ setHTML('<div class="card"><div class="alert alert-err">שגיאה בטעינה: '+esc(err.message)+'</div></div>'); });
   }
 
@@ -488,10 +501,12 @@
     setHTML('<div class="loading">טוען נתוני משתתפים…</div>');
     Promise.all([
       db.collection("registry").get(),
-      db.collection("participants").get()
+      db.collection("participants").get(),
+      db.collection("approvals").get().catch(function(){ return { forEach: function(){} }; })
     ]).then(function(res){
       var registry = []; res[0].forEach(function(d){ registry.push(d.data()); });
       var parts = []; res[1].forEach(function(d){ parts.push({uid:d.id, data:d.data()}); });
+      var approvals = {}; res[2].forEach(function(d){ approvals[d.id] = d.data(); });
       return Promise.all(parts.map(function(p){
         return Promise.all([
           db.collection("participants").doc(p.uid).collection("forms").get(),
@@ -501,32 +516,38 @@
           p.uploads = {}; r[1].forEach(function(d){ var u = d.data(); (p.uploads[u.itemId] = p.uploads[u.itemId] || []).push(u); });
           return p;
         });
-      })).then(function(parts2){ renderAdmin(registry, parts2); });
+      })).then(function(parts2){ renderAdmin(registry, parts2, approvals); });
     }).catch(function(err){ setHTML(backLink()+'<div class="card"><div class="alert alert-err">שגיאה בטעינה (ודאו שכתובת המייל מוגדרת כמנהל בכללי האבטחה, ושפורסמו כללי ה-registry): '+esc(err.message)+'</div></div>'); });
   }
 
-  function buildPeople(registry, parts){
+  function buildPeople(registry, parts, approvals){
+    approvals = approvals || {};
     var byEmail = {}; parts.forEach(function(p){ byEmail[emailKey(p.data.email)] = p; });
     var used = {}, people = [];
+    function ap(uid){ return uid && approvals[uid] ? approvals[uid] : null; }
     registry.sort(function(a,b){ return String(a.processNumber||"").localeCompare(String(b.processNumber||"")); });
     registry.forEach(function(r){
       var p = byEmail[emailKey(r.email)]; if (p) used[p.uid] = true;
+      var a = ap(p && p.uid);
       people.push({ processNumber:r.processNumber||(p&&p.data.processNumber)||"", name:r.name||(p&&p.data.name)||"", email:r.email,
         phone:r.phone||"", trainingDate:r.trainingDate||"", registered:true, uid:p?p.uid:null, loggedIn:!!p,
-        forms:p?p.forms:{}, uploads:p?p.uploads:{}, updatedAt:p?p.data.updatedAt:null });
+        forms:p?p.forms:{}, uploads:p?p.uploads:{}, updatedAt:p?p.data.updatedAt:null,
+        approved:!!(a&&a.approved), approval:a });
     });
     parts.forEach(function(p){
       if (used[p.uid]) return;
+      var a = ap(p.uid);
       people.push({ processNumber:p.data.processNumber||"", name:p.data.name||"", email:p.data.email||"",
         phone:p.data.phone||"", trainingDate:"", registered:false, uid:p.uid, loggedIn:true,
-        forms:p.forms, uploads:p.uploads, updatedAt:p.data.updatedAt });
+        forms:p.forms, uploads:p.uploads, updatedAt:p.data.updatedAt,
+        approved:!!(a&&a.approved), approval:a });
     });
     return people;
   }
 
-  function renderAdmin(registry, parts){
+  function renderAdmin(registry, parts, approvals){
     var cols = adminCols(), totalItems = cols.length;
-    var people = buildPeople(registry, parts);
+    var people = buildPeople(registry, parts, approvals);
     function doneCount(p){ var c=0; cols.forEach(function(col){ if(col.kind==='form'){ if(p.forms[col.id]) c++; } else { if((p.uploads[col.id]||[]).length) c++; } }); return c; }
     var loggedIn = people.filter(function(p){ return p.loggedIn; }).length;
     var fullyDone = people.filter(function(p){ return totalItems && doneCount(p)===totalItems; }).length;
@@ -548,15 +569,25 @@
 
     // ----- members table with invite link -----
     html += '<div class="card"><h2 style="margin-top:0">חברים רשומים</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr>'+
-      '<th>מס׳ תהליך</th><th>שם</th><th>מייל</th><th>טלפון</th><th>הדרכה</th><th style="text-align:center">סטטוס</th><th style="text-align:center">הושלם</th><th style="text-align:center">קישור</th></tr></thead><tbody>';
+      '<th>מס׳ תהליך</th><th>שם</th><th>מייל</th><th>טלפון</th><th>הדרכה</th><th style="text-align:center">סטטוס</th><th style="text-align:center">הושלם</th><th style="text-align:center">קישור</th><th style="text-align:center">הסמכה ותעודה</th></tr></thead><tbody>';
     people.forEach(function(p){
       var status = !p.loggedIn ? '<span class="badge badge-missing">טרם התחבר</span>' : (p.registered ? '<span class="badge badge-done">התחבר</span>' : '<span class="badge" style="background:#EEF1F5;color:#595959">נכנס ישירות</span>');
+      var certCell;
+      if (!p.uid){ certCell = '<span class="muted">—</span>'; }
+      else if (p.approved){
+        certCell = '<span class="badge badge-done">אושר ✓</span><br>'+
+          '<button class="btn btn-sm btn-gold" data-cert data-cn="'+esc((p.approval&&p.approval.name)||p.name||'')+'" data-cnum="'+esc((p.approval&&p.approval.processNumber)||p.processNumber||'')+'" data-cdate="'+esc(fmtDay(p.approval&&p.approval.approvedAt))+'" style="margin-top:4px">תעודה (PDF)</button> '+
+          '<button class="btn btn-sm btn-outline" data-unapprove data-uid="'+esc(p.uid)+'" style="margin-top:4px">בטל</button>';
+      } else {
+        certCell = '<button class="btn btn-sm btn-primary" data-approve data-uid="'+esc(p.uid)+'" data-nm="'+esc(p.name||'')+'" data-num="'+esc(p.processNumber||'')+'">אשר להסמכה</button>';
+      }
       html += '<tr><td style="white-space:nowrap;font-weight:700;color:var(--navy)">'+esc(p.processNumber||'—')+'</td>'+
         '<td style="white-space:nowrap">'+esc(p.name||'')+'</td><td style="white-space:nowrap">'+esc(p.email||'')+'</td>'+
         '<td style="white-space:nowrap">'+esc(p.phone||'')+'</td><td style="white-space:nowrap">'+esc(p.trainingDate||'')+'</td>'+
         '<td style="text-align:center">'+status+'</td>'+
         '<td style="text-align:center;white-space:nowrap">'+doneCount(p)+'/'+totalItems+'</td>'+
-        '<td style="text-align:center"><a class="btn btn-sm btn-gold" href="'+inviteHref(p)+'">שליחת קישור</a></td></tr>';
+        '<td style="text-align:center"><a class="btn btn-sm btn-gold" href="'+inviteHref(p)+'">שליחת קישור</a></td>'+
+        '<td style="text-align:center;white-space:nowrap">'+certCell+'</td></tr>';
     });
     html += '</tbody></table></div></div>';
 
@@ -609,6 +640,110 @@
         toast("נרשם בהצלחה · מספר "+pn,"ok"); viewAdmin();
       }).catch(function(err){ rb.disabled=false; rb.textContent="רישום והקצאת מספר"; msg.innerHTML='<div class="alert alert-err">'+esc(err.message)+'</div>'; });
     }; }
+
+    // approve / unapprove / certificate
+    Array.prototype.forEach.call(document.querySelectorAll('[data-approve]'), function(b){
+      b.onclick = function(){
+        b.disabled = true; b.textContent = "מאשר…";
+        approveMember(b.getAttribute('data-uid'), { name:b.getAttribute('data-nm'), processNumber:b.getAttribute('data-num') }, true)
+          .then(function(){ toast("אושר להסמכה","ok"); viewAdmin(); })
+          .catch(function(e){ b.disabled=false; b.textContent="אשר להסמכה"; toast("שגיאה: "+e.message,"err"); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-unapprove]'), function(b){
+      b.onclick = function(){
+        if (!confirm("לבטל את אישור ההסמכה?")) return;
+        approveMember(b.getAttribute('data-uid'), {}, false)
+          .then(function(){ toast("האישור בוטל","ok"); viewAdmin(); })
+          .catch(function(e){ toast("שגיאה: "+e.message,"err"); });
+      };
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cert]'), function(b){
+      b.onclick = function(){ downloadCert(b.getAttribute('data-cn'), b.getAttribute('data-cnum'), b.getAttribute('data-cdate')); };
+    });
+  }
+
+  /* ---------- certificate (PDF) ---------- */
+  function fmtDay(ts){
+    try { var d = ts && ts.toDate ? ts.toDate() : (ts ? new Date(ts) : new Date()); return d.toLocaleDateString("he-IL"); }
+    catch(e){ return new Date().toLocaleDateString("he-IL"); }
+  }
+
+  function buildCertHTML(name, num, issueDate){
+    return ''+
+    '<style>'+
+    '.cert{width:794px;min-height:1123px;box-sizing:border-box;margin:0 auto;position:relative;padding:54px 60px;color:#262626;font-family:"Segoe UI",Arial,sans-serif;background:radial-gradient(ellipse at 50% 30%, #fdfbf4 0%, #f6efdd 58%, #ead9b8 100%)}'+
+    '.cert-frame{position:absolute;inset:18px;border:2px solid #1F3864;pointer-events:none}'+
+    '.cert-frame:before{content:"";position:absolute;inset:6px;border:1px solid #A9772E}'+
+    '.c-inner{position:relative;text-align:center}'+
+    '.c-logo{width:320px;margin:8px auto 26px;display:block}'+
+    '.c-title{color:#1F3864;font-size:34px;font-weight:700;margin:0 0 6px;line-height:1.25}'+
+    '.c-sub{color:#A9772E;font-size:16px;letter-spacing:4px;margin:0 0 22px}'+
+    '.c-rule{width:150px;height:2px;background:#A9772E;border:0;margin:18px auto}'+
+    '.c-num{display:inline-block;color:#1F3864;font-size:17px;font-weight:700;border:1.5px solid #A9772E;border-radius:24px;padding:5px 22px;margin-bottom:24px;background:rgba(255,255,255,.35)}'+
+    '.c-name{color:#1F3864;font-size:40px;font-weight:700;margin:6px 0 18px}'+
+    '.c-body{font-size:17px;line-height:1.9;max-width:620px;margin:0 auto 6px}'+
+    '.c-body.muted{color:#444}'+
+    '.c-seal{width:148px;margin:22px auto 8px;display:block}'+
+    '.c-dates{font-size:15px;color:#333;margin:6px 0 2px}'+
+    '.c-valid{font-size:14px;color:#777;margin-bottom:26px}'+
+    '.c-sign{display:flex;justify-content:space-around;margin-top:18px}'+
+    '.c-sign > div{width:46%}'+
+    '.c-sign .sig-img{height:54px;display:block;margin:0 auto -4px}'+
+    '.c-sign .sig-ph{height:54px}'+
+    '.c-sign .line{border-top:1px solid #555;margin:0 18px 6px;padding-top:6px}'+
+    '.c-sign .role{font-size:14px;color:#1F3864;font-weight:600}'+
+    '.c-foot{margin-top:30px;font-size:12px;color:#8a7a55}'+
+    '</style>'+
+    '<div class="cert" id="certDoc"><div class="cert-frame"></div><div class="c-inner">'+
+      '<img class="c-logo" src="assets/cert-logo.png" alt="לשכת היועצים"/>'+
+      '<h1 class="c-title">תעודת יועץ עסקי מוסמך לקוד המקצוע</h1>'+
+      '<div class="c-sub">OFFICIAL CERTIFICATION · ISBC</div>'+
+      '<div class="c-num">מס׳ '+esc(num)+'</div>'+
+      '<div class="c-name">'+esc(name)+'</div>'+
+      '<div class="c-body">עמד/ה בהצלחה בדרישות הסמכת קוד מקצוע היועץ העסקי של לשכת היועצים העסקיים בישראל, ובהתאם לכך מוענקת לו/לה בזאת ההסמכה המקצועית.</div>'+
+      '<hr class="c-rule"/>'+
+      '<div class="c-body muted">הסמכה זו מעידה כי בעל/ת התעודה עומד/ת בסטנדרטים המקצועיים, האתיים והאיכותיים של מקצוע הייעוץ העסקי, כפי שנקבעו על ידי לשכת היועצים העסקיים והניהוליים בישראל במסגרת קוד מקצוע היועץ העסקי.</div>'+
+      '<img class="c-seal" src="assets/cert-seal.png" alt="חותם CISBC"/>'+
+      '<div class="c-dates">תאריך הנפקת ההסמכה: '+esc(issueDate)+'</div>'+
+      '<div class="c-valid">תעודה זו תקפה עד ליום 31/12/2027</div>'+
+      '<div class="c-sign">'+
+        '<div><img class="sig-img" src="assets/sig-president.png" alt="חתימה"/><div class="line"></div><div class="role">נשיא/ת הלשכה</div></div>'+
+        '<div><img class="sig-img" src="assets/sig-jude.png" alt="חתימה"/><div class="line"></div><div class="role">מנהל/ת ההסמכות</div></div>'+
+      '</div>'+
+      '<div class="c-foot">לשכת היועצים העסקיים בישראל (ע״ר) · 580321511</div>'+
+    '</div></div>';
+  }
+
+  function downloadCert(name, num, issueDate){
+    if (typeof html2canvas !== "function" || !window.jspdf || !window.jspdf.jsPDF){
+      toast("רכיב הפקת ה-PDF עדיין נטען, נסו שוב בעוד רגע","err"); return;
+    }
+    var host = document.createElement("div");
+    host.style.position="fixed"; host.style.left="-99999px"; host.style.top="0"; host.style.background="#fff";
+    host.innerHTML = buildCertHTML(name, num, issueDate);
+    document.body.appendChild(host);
+    var el = host.querySelector("#certDoc");
+    toast("מכין את התעודה…","info");
+    html2canvas(el, {scale:2, useCORS:true, backgroundColor:"#ffffff"}).then(function(canvas){
+      var pdf = new window.jspdf.jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+      var w=210, h=canvas.height*w/canvas.width;
+      pdf.addImage(canvas.toDataURL("image/jpeg",0.92), "JPEG", 0, 0, w, h);
+      pdf.save("תעודה " + num + ".pdf");
+      document.body.removeChild(host);
+    }).catch(function(e){ if(host.parentNode) document.body.removeChild(host); toast("שגיאה בהפקת התעודה: "+e.message,"err"); });
+  }
+
+  // committee: approve / unapprove a member for certification
+  function approveMember(uid, person, approve){
+    var ts = firebase.firestore.FieldValue.serverTimestamp();
+    return db.collection("approvals").doc(uid).set({
+      approved: !!approve,
+      name: person.name || null,
+      processNumber: person.processNumber || null,
+      approvedAt: ts,
+      approvedBy: currentUser.email
+    }, { merge: true });
   }
 
   init();
