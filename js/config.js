@@ -158,7 +158,7 @@ window.APP_CONFIG = {
         { type: "section", level: 3, label: "4.3 יכולת הסתגלות" },
         { type: "rating", id: "adaptability", label: "יכולת הסתגלות", zero: true },
         { type: "textarea", id: "adaptExample", label: "תארו מצב שבו נדרשתם להסתגל במהירות" },
-        { type: "section", label: "5. מומחיות טכנית" },
+        { type: "section", label: "5. מומחיות טכנולוגית" },
         { type: "section", level: 3, label: "5.1 התמחות רלוונטית" },
         { type: "text", id: "mainField", label: "התחום הראשי שלכם" },
         { type: "text", id: "yearsInField", label: "שנות ניסיון בתחום" },

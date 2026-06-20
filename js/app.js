@@ -322,7 +322,7 @@
     }
     if (form.closing){ html += '<p class="muted">'+esc(form.closing)+'</p>'; }
     var checked = existing ? "checked" : "";
-    html += '<div class="field"><label><input type="checkbox" id="confirmChk" '+checked+' /> '+esc(form.confirmText||"קראתי ואני מאשר/ת")+'</label></div>';
+    html += '<label class="confirm"><input type="checkbox" id="confirmChk" '+checked+' /><span>'+esc(form.confirmText||"קראתי ואני מאשר/ת")+'</span></label>';
 
     if (form.requireSignature){
       html += '<h3>חתימה</h3><div class="muted">חִתמו בעזרת העכבר או האצבע במסגרת:</div>'+
@@ -404,7 +404,7 @@
         html += '</div>';
       }
     });
-    if (form.confirmText){ html += '<div class="field"><label><input type="checkbox" id="confirmChk" '+(existing?'checked':'')+'/> '+esc(form.confirmText)+'</label></div>'; }
+    if (form.confirmText){ html += '<label class="confirm"><input type="checkbox" id="confirmChk" '+(existing?'checked':'')+'/><span>'+esc(form.confirmText)+'</span></label>'; }
     if (form.requireSignature){
       html += '<h3>חתימה</h3><div class="muted">חִתמו בעזרת העכבר או האצבע:</div><div class="sig-wrap"><canvas id="sig" class="sig-canvas"></canvas></div><div class="sig-actions"><button class="btn btn-sm btn-outline" id="sigClear">ניקוי חתימה</button></div>';
       if (existing && existing.signatureUrl){ html += '<div class="muted" style="margin-top:8px">חתימה קיימת:</div><img src="'+esc(existing.signatureUrl)+'" alt="חתימה" style="max-height:80px;border:1px solid var(--line);border-radius:8px"/>'; }
