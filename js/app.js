@@ -582,7 +582,7 @@
         certCell = '<button class="btn btn-sm btn-primary" data-approve data-uid="'+esc(p.uid)+'" data-nm="'+esc(p.name||'')+'" data-num="'+esc(p.processNumber||'')+'">אשר להסמכה</button>';
       }
       html += '<tr><td style="white-space:nowrap;font-weight:700;color:var(--navy)">'+esc(p.processNumber||'—')+'</td>'+
-        '<td style="white-space:nowrap">'+esc(p.name||'')+'</td><td style="white-space:nowrap">'+esc(p.email||'')+'</td>'+
+        '<td style="white-space:nowrap">'+esc(p.name||'')+(p.uid?' <button class="btn btn-sm btn-outline" data-editname data-uid="'+esc(p.uid)+'" data-cn="'+esc(p.name||'')+'" style="padding:2px 8px;font-size:12px" title="עריכת שם">✎</button>':'')+'</td><td style="white-space:nowrap">'+esc(p.email||'')+'</td>'+
         '<td style="white-space:nowrap">'+esc(p.phone||'')+'</td><td style="white-space:nowrap">'+esc(p.trainingDate||'')+'</td>'+
         '<td style="text-align:center">'+status+'</td>'+
         '<td style="text-align:center;white-space:nowrap">'+doneCount(p)+'/'+totalItems+'</td>'+
@@ -661,6 +661,24 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-cert]'), function(b){
       b.onclick = function(){ downloadCert(b.getAttribute('data-cn'), b.getAttribute('data-cnum'), b.getAttribute('data-cdate')); };
     });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-editname]'), function(b){
+      b.onclick = function(){ editName(b.getAttribute('data-uid'), b.getAttribute('data-cn')); };
+    });
+  }
+
+  // committee: set/fix a participant's name (for direct logins that have only an email)
+  function editName(uid, current){
+    var name = window.prompt("שם מלא של המשתתף:", current || "");
+    if (name === null) return;
+    name = name.trim();
+    if (!name) return;
+    var pref = db.collection("participants").doc(uid);
+    var aref = db.collection("approvals").doc(uid);
+    pref.set({ name: name }, { merge: true })
+      .then(function(){ return aref.get(); })
+      .then(function(s){ if (s && s.exists) return aref.set({ name: name }, { merge: true }); })
+      .then(function(){ toast("השם עודכן", "ok"); viewAdmin(); })
+      .catch(function(e){ toast("שגיאה: " + e.message, "err"); });
   }
 
   /* ---------- certificate (PDF) ---------- */
