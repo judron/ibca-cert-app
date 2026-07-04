@@ -668,7 +668,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-editname]'), function(b){
       b.onclick = function(){ editName(b.getAttribute('data-uid'), b.getAttribute('data-cn')); };
     });
-    var _pp = people.filter(function(p){ return p.email; });
+    var _pp = people.filter(function(p){ return p.email && totalItems > 0 && doneCount(p) === totalItems; });
     var _listText = _pp.map(function(p){ return (p.name||'(ללא שם)') + '\t' + p.email; }).join('\n');
     var _mailsText = _pp.map(function(p){ return p.email; }).join(', ');
     function _showCopy(txt){ var t=document.getElementById('expBox'); if(!t) return; t.style.display='block'; t.value=txt; t.focus(); t.select(); try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt); } else { document.execCommand('copy'); } toast('הועתק ללוח','ok'); }catch(e){ toast('נבחר, העתיקו עם Ctrl+C','info'); } }
