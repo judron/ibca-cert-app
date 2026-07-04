@@ -589,7 +589,11 @@
         '<td style="text-align:center"><a class="btn btn-sm btn-gold" href="'+inviteHref(p)+'">שליחת קישור</a></td>'+
         '<td style="text-align:center;white-space:nowrap">'+certCell+'</td></tr>';
     });
-    html += '</tbody></table></div></div>';
+    html += '</tbody></table></div>'+
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+        '<button class="btn btn-sm btn-outline" id="expList">העתק שמות + מיילים</button>'+
+        '<button class="btn btn-sm btn-outline" id="expMails">העתק מיילים בלבד</button></div>'+
+      '<textarea id="expBox" readonly style="width:100%;min-height:70px;margin-top:8px;display:none"></textarea></div>';
 
     // ----- overview matrix: who submitted what -----
     html += '<div class="card"><h2 style="margin-top:0">מי הגיש מה</h2><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>חבר</th>';
@@ -664,6 +668,12 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-editname]'), function(b){
       b.onclick = function(){ editName(b.getAttribute('data-uid'), b.getAttribute('data-cn')); };
     });
+    var _pp = people.filter(function(p){ return p.email; });
+    var _listText = _pp.map(function(p){ return (p.name||'(ללא שם)') + '\t' + p.email; }).join('\n');
+    var _mailsText = _pp.map(function(p){ return p.email; }).join(', ');
+    function _showCopy(txt){ var t=document.getElementById('expBox'); if(!t) return; t.style.display='block'; t.value=txt; t.focus(); t.select(); try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt); } else { document.execCommand('copy'); } toast('הועתק ללוח','ok'); }catch(e){ toast('נבחר, העתיקו עם Ctrl+C','info'); } }
+    var _e1=document.getElementById('expList'); if(_e1) _e1.onclick=function(){ _showCopy(_listText); };
+    var _e2=document.getElementById('expMails'); if(_e2) _e2.onclick=function(){ _showCopy(_mailsText); };
   }
 
   // committee: set/fix a participant's name (for direct logins that have only an email)
