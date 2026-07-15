@@ -403,6 +403,19 @@
         if (it.other){ html += '<input type="text" data-fid="'+it.id+'_other" placeholder="אחר / פירוט…" value="'+esc(data[it.id+'_other']||"")+'" style="margin-top:6px"/>'; }
         html += '</div>';
       }
+      else if (it.type==='levels'){
+        var lv = (v && typeof v==='object' && !Array.isArray(v)) ? v : {};
+        var _LV = [{v:'main',t:'התחום העיקרי שלי'},{v:'secondary',t:'תחום משני שלי'},{v:'general',t:'ידע כללי'},{v:'none',t:'לא מכיר / לא מכיר מספיק'}];
+        html += '<div class="field"><label>'+esc(it.label)+'</label><div class="lvl-group">';
+        it.options.forEach(function(opt, i){
+          html += '<div class="lvl-item"><div class="lvl-name">'+esc(opt)+'</div><div class="lvl-opts">';
+          _LV.forEach(function(L){ var sel=(lv[opt]===L.v); html += '<label class="lvl-opt'+(sel?' sel':'')+'"><input type="radio" name="lvl_'+it.id+'_'+i+'" value="'+L.v+'"'+(sel?' checked':'')+'/>'+esc(L.t)+'</label>'; });
+          html += '</div></div>';
+        });
+        html += '</div>';
+        if (it.other){ html += '<input type="text" data-fid="'+it.id+'_other" placeholder="אחר / פירוט…" value="'+esc(data[it.id+'_other']||"")+'" style="margin-top:6px"/>'; }
+        html += '</div>';
+      }
     });
     if (form.confirmText){ html += '<label class="confirm"><input type="checkbox" id="confirmChk" '+(existing?'checked':'')+'/><span>'+esc(form.confirmText)+'</span></label>'; }
     if (form.requireSignature){
@@ -417,6 +430,11 @@
         Array.prototype.forEach.call(grp.querySelectorAll('.rating-opt'), function(l){ l.classList.toggle('sel', l.querySelector('input').checked); });
       });
     });
+    Array.prototype.forEach.call(document.querySelectorAll('.lvl-opts'), function(grp){
+      grp.addEventListener('change', function(){
+        Array.prototype.forEach.call(grp.querySelectorAll('.lvl-opt'), function(l){ l.classList.toggle('sel', l.querySelector('input').checked); });
+      });
+    });
 
     var pad = form.requireSignature ? new SigPad(document.getElementById("sig")) : null;
     if (document.getElementById("sigClear")) document.getElementById("sigClear").onclick = function(){ pad.clear(); };
@@ -428,6 +446,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('[data-fid]'), function(el){ out[el.getAttribute("data-fid")] = (el.value||"").trim(); });
       form.items.forEach(function(it){
         if (it.type==='checkboxes'){ out[it.id] = Array.prototype.slice.call(document.querySelectorAll('[data-cg="'+it.id+'"]:checked')).map(function(c){return c.value;}); }
+        if (it.type==='levels'){ var _o={}; it.options.forEach(function(opt,i){ var r=document.querySelector('input[name="lvl_'+it.id+'_'+i+'"]:checked'); if(r) _o[opt]=r.value; }); out[it.id]=_o; }
         if (it.type==='rating'){ var r=document.querySelector('input[name="r_'+it.id+'"]:checked'); out[it.id] = r?r.value:""; }
         if (it.required && (it.type==='text'||it.type==='textarea') && !out[it.id]){ ok=false; if(!firstMissing) firstMissing=it.label; }
       });

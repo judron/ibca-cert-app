@@ -122,6 +122,14 @@ h3{color:var(--navy2); font-size:16px; margin:16px 0 6px}
 .chk{display:flex; align-items:center; gap:6px; font-size:14px; font-weight:400; color:var(--ink)}
 .confirm{display:flex; align-items:flex-start; gap:10px; margin:18px 0; font-size:15px; font-weight:600; color:var(--navy2); cursor:pointer; text-align:right; line-height:1.55}
 .confirm input{width:18px; height:18px; flex:none; margin:3px 0 0; padding:0}
+.lvl-group{margin-top:4px}
+.lvl-item{padding:9px 0; border-bottom:1px solid var(--line)}
+.lvl-item:last-child{border-bottom:none}
+.lvl-name{font-weight:600; color:var(--ink); margin-bottom:5px; font-size:14px}
+.lvl-opts{display:flex; flex-wrap:wrap; gap:6px}
+.lvl-opt{display:inline-flex; align-items:center; gap:4px; border:1.5px solid var(--line); border-radius:8px; padding:4px 10px; cursor:pointer; font-size:13px; user-select:none}
+.lvl-opt.sel{background:var(--navy); color:#fff; border-color:var(--navy)}
+.lvl-opt input{margin:0}
 .field textarea{resize:vertical; min-height:64px}
 .loading{text-align:center; color:var(--grey); padding:40px}
 .progress{height:8px; background:var(--line); border-radius:999px; overflow:hidden; margin:6px 0 2px}
