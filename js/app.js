@@ -739,7 +739,8 @@
     '.c-sign .sig-img{height:54px;display:block;margin:0 auto -4px}'+
     '.c-sign .sig-ph{height:54px}'+
     '.c-sign .line{border-top:1px solid #555;margin:0 18px 6px;padding-top:6px}'+
-    '.c-sign .role{font-size:14px;color:#1F3864;font-weight:600}'+
+    '.c-sign .sig-name{font-size:15px;color:#1F3864;font-weight:700}'+
+    '.c-sign .role{font-size:13px;color:#595959;font-weight:600}'+
     '.c-foot{margin-top:30px;font-size:12px;color:#8a7a55}'+
     '</style>'+
     '<div class="cert" id="certDoc"><div class="cert-frame"></div><div class="c-inner">'+
@@ -755,8 +756,8 @@
       '<div class="c-dates">תאריך הנפקת ההסמכה: '+esc(issueDate)+'</div>'+
       '<div class="c-valid">תעודה זו תקפה עד ליום 31/12/2027</div>'+
       '<div class="c-sign">'+
-        '<div><img class="sig-img" src="assets/sig-president.png" alt="חתימה"/><div class="line"></div><div class="role">נשיא/ת הלשכה</div></div>'+
-        '<div><img class="sig-img" src="assets/sig-jude.png" alt="חתימה"/><div class="line"></div><div class="role">מנהל/ת ההסמכות</div></div>'+
+        '<div><img class="sig-img" src="assets/sig-president.png" alt="חתימה"/><div class="line"></div><div class="sig-name">חיים אייזנפלד</div><div class="role">נשיא הלשכה</div></div>'+
+        '<div><img class="sig-img" src="assets/sig-jude.png" alt="חתימה"/><div class="line"></div><div class="sig-name">ג\'וד ברק</div><div class="role">יו״ר ועדת הסמכה</div></div>'+
       '</div>'+
       '<div class="c-foot">לשכת היועצים העסקיים בישראל (ע״ר) · 580321511</div>'+
     '</div></div>';
