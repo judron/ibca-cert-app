@@ -22,17 +22,27 @@ service cloud.firestore {
     }
 
     // counter for the sequential process number (IBCA-2026-001 ...)
+    // read is public; writing is allowed to any signed-in user, OR to anyone
+    // as long as it only increments "last" by exactly 1 (public self-registration).
     match /counters/{doc} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null
+        || (request.resource.data.keys().hasOnly(['last'])
+            && request.resource.data.last is int
+            && request.resource.data.last == (resource == null ? 0 : resource.data.last) + 1);
     }
 
     // registry: committee pre-registers members and assigns numbers.
     // a member may read only their own entry (to claim their number on first login).
+    // public self-registration may CREATE a new entry only (not overwrite an existing one),
+    // and only when the entry's email matches the document id.
     match /registry/{emailId} {
       allow get: if request.auth != null &&
         (isAdmin() || resource == null || resource.data.email == request.auth.token.email);
       allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin() ||
+        (resource == null && request.resource.data.email == emailId);
+      allow update, delete: if isAdmin();
     }
 
     // approvals: only the committee writes; a member may read their own (to download the certificate).

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הרשמה להסמכת קוד המקצוע · לשכת היועצים העסקיים והניהוליים</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <meta name="theme-color" content="#1F3864" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-title">לשכת היועצים העסקיים והניהוליים בישראל</span>
+        <span class="brand-sub">ועדת קוד המקצוע · הרשמה להסמכה</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="container">
+    <div class="loading">טוען…</div>
+  </main>
+
+  <footer class="footer">
+    <span>לשכת היועצים העסקיים והניהוליים בישראל (IBCA) · ועדת קוד המקצוע</span>
+  </footer>
+
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/config.js"></script>
+
+  <script>
+  (function () {
+    "use strict";
+    var appEl = document.getElementById("app");
+    var CFG = window.APP_CONFIG || {};
+    var REG = CFG.registration || {};
+    var db = null;
+
+    function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+    function emailKey(e){ return (e||"").trim().toLowerCase(); }
+    function pad3(n){ return n < 1000 ? ("00" + n).slice(-3) : ("" + n); }
+    function set(html){ appEl.innerHTML = html; }
+
+    if (!window.FIREBASE_CONFIG || window.FIREBASE_CONFIG.apiKey === "XXXX"){
+      set('<div class="card"><h1>האפליקציה עדיין לא חוברה ל-Firebase</h1>'+
+        '<p class="lead">יש למלא את js/firebase-config.js בערכים של פרויקט ה-Firebase.</p></div>');
+      return;
+    }
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    db = firebase.firestore();
+
+    renderForm();
+
+    function renderForm(msg){
+      set(
+        '<h1>הרשמה להסמכת קוד המקצוע</h1>'+
+        '<p class="lead">'+esc(REG.intro||"מלאו את הפרטים כדי להירשם.")+'</p>'+
+        '<div class="card">'+
+        '<div class="field"><label>שם מלא *</label><input id="r_name" type="text" autocomplete="name" /></div>'+
+        '<div class="field"><label>כתובת מייל *</label><input id="r_email" type="email" placeholder="name@example.com" autocomplete="email" /></div>'+
+        '<div class="field"><label>טלפון</label><input id="r_phone" type="tel" autocomplete="tel" /></div>'+
+        '<div class="field"><label>האם את/ה חבר/ת הלשכה? *</label>'+
+          '<label class="chk" style="font-weight:400;margin:4px 0"><input type="radio" name="r_member" value="member" /> כן, חבר/ת לשכה</label>'+
+          '<label class="chk" style="font-weight:400;margin:4px 0"><input type="radio" name="r_member" value="guest" /> לא, אורח/ת</label>'+
+        '</div>'+
+        '<div class="field"><label>מספר הסמכה קודם (אם קיבלת בעבר)</label><input id="r_prev" type="text" /></div>'+
+        '<button class="btn btn-primary" id="r_submit" style="width:100%">הרשמה והמשך לתשלום</button>'+
+        '<div id="r_msg" style="margin-top:10px">'+(msg||"")+'</div>'+
+        '</div>'
+      );
+      document.getElementById("r_submit").onclick = submit;
+    }
+
+    function submit(){
+      var msg = document.getElementById("r_msg");
+      var name = (document.getElementById("r_name").value||"").trim();
+      var email = (document.getElementById("r_email").value||"").trim();
+      var phone = (document.getElementById("r_phone").value||"").trim();
+      var prev = (document.getElementById("r_prev").value||"").trim();
+      var memberEl = document.querySelector('input[name="r_member"]:checked');
+      var member = memberEl ? memberEl.value : "";
+
+      if (!name){ msg.innerHTML = '<div class="alert alert-err">נא למלא שם מלא.</div>'; return; }
+      if (!email || email.indexOf("@") === -1){ msg.innerHTML = '<div class="alert alert-err">נא למלא כתובת מייל תקינה.</div>'; return; }
+      if (!member){ msg.innerHTML = '<div class="alert alert-err">נא לציין אם את/ה חבר/ת לשכה.</div>'; return; }
+
+      var btn = document.getElementById("r_submit"); btn.disabled = true; btn.textContent = "נרשם…";
+      register(name, email, phone, member, prev).then(function(res){
+        success(name, email, member, res.processNumber, false);
+      }).catch(function(err){
+        // כפילות (מייל שכבר רשום) נחסמת ע"י כללי האבטחה ומחזירה permission-denied.
+        var dup = err && (err.code === "permission-denied" || /permission/i.test(err.message||""));
+        fallback(name, email, member, dup);
+      });
+    }
+
+    // הרשמה ישירה למערכת: הקצאת מספר התהליך הבא ורישום חדש ב-registry (יצירה בלבד).
+    // לא קוראים את ה-registry (שמירה על פרטיות); יצירה כפולה נחסמת בכללי האבטחה.
+    function register(name, email, phone, member, prev){
+      var key = emailKey(email);
+      var rref = db.collection("registry").doc(key);
+      var cref = db.collection("counters").doc("process");
+      var ts = firebase.firestore.FieldValue.serverTimestamp();
+      return db.runTransaction(function(tx){
+        return tx.get(cref).then(function(cs){
+          var last = (cs.exists && cs.data().last) ? cs.data().last : 0;
+          var next = last + 1;
+          var pn = "IBCA-2026-" + pad3(next);
+          tx.set(cref, { last: next }, { merge: true });
+          // ללא merge: אם הרשומה כבר קיימת זו פעולת update שנחסמת בכללים, וכל הטרנזקציה מתבטלת.
+          tx.set(rref, {
+            name: name, email: key, phone: phone || null,
+            processNumber: pn, source: "self", member: (member === "member"),
+            prevCert: prev || null, paid: false, createdAt: ts
+          });
+          return { processNumber: pn };
+        });
+      });
+    }
+
+    function paymentCard(member){
+      var coupons = REG.coupons || {};
+      var c = (member === "member") ? coupons.member : coupons.guest;
+      var payUrl = REG.paymentUrl || "#";
+      var html = '<div class="card"><h2 style="margin-top:0">המשך לתשלום</h2>';
+      if (c){
+        html += '<div class="alert alert-info">בדף התשלום הקלידו את קוד הקופון:<br>'+
+          '<span style="font-weight:700;font-size:18px;color:var(--navy)">'+esc(c.code)+'</span> — '+esc(c.label)+
+          ' <button class="btn btn-sm btn-outline" id="copyCoupon" style="margin-right:8px">העתקת הקוד</button></div>';
+      }
+      if (REG.payNote){ html += '<p class="muted">'+esc(REG.payNote)+'</p>'; }
+      html += '<a class="btn btn-gold" href="'+esc(payUrl)+'" style="display:inline-block">המשך לתשלום ←</a></div>';
+      return { html: html, coupon: c };
+    }
+
+    function nextStepsCard(){
+      return '<div class="card"><h3 style="margin-top:0">מה הלאה?</h3>'+
+        '<p>לאחר התשלום תועברו לדף פרטי המפגש (תאריך, מיקום וקישור זום).</p>'+
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+          '<a class="btn btn-sm btn-outline" href="event.html">פרטי המפגש</a>'+
+          '<a class="btn btn-sm btn-outline" href="index.html">כניסה לאזור האישי</a>'+
+        '</div></div>';
+    }
+
+    function wireCopy(coupon){
+      var cc = document.getElementById("copyCoupon");
+      if (cc && coupon){ cc.onclick = function(){
+        try{
+          if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(coupon.code); }
+          cc.textContent = "הועתק ✓";
+        }catch(e){ cc.textContent = "העתיקו ידנית: "+coupon.code; }
+      }; }
+    }
+
+    function success(name, email, member, processNumber){
+      var pay = paymentCard(member);
+      var html =
+        '<div class="card" style="border:1.5px solid var(--gold);background:#FBF7EF">'+
+          '<h1 style="margin-top:0">🎉 ההרשמה נקלטה בהצלחה</h1>'+
+          '<p class="lead">'+esc(name)+', נרשמת לתהליך הסמכת קוד המקצוע.</p>'+
+          (processNumber ? '<div class="field"><label>מספר התהליך שלך</label><div style="font-weight:700;color:var(--navy);font-size:20px">'+esc(processNumber)+'</div></div>' : '')+
+        '</div>'+
+        pay.html + nextStepsCard();
+      set(html);
+      wireCopy(pay.coupon);
+    }
+
+    function fallback(name, email, member, dup){
+      var pay = paymentCard(member);
+      var note = dup
+        ? 'נראה שכבר נרשמת עם המייל הזה. אין צורך להירשם שוב — אפשר להמשיך לתשלום. אם זו טעות, פנו לוועדה.'
+        : 'לא הצלחנו להשלים את ההרשמה כרגע. אפשר לנסות שוב, ואם כבר נרשמת בעבר אפשר להמשיך לתשלום.';
+      var html =
+        '<div class="card"><div class="alert '+(dup?'alert-info':'alert-warn')+'">'+esc(note)+'</div>'+
+          '<button class="btn btn-outline" id="r_back">חזרה לטופס ההרשמה</button></div>'+
+        pay.html + nextStepsCard();
+      set(html);
+      wireCopy(pay.coupon);
+      var b = document.getElementById("r_back");
+      if (b){ b.onclick = function(){ renderForm(); }; }
+    }
+  })();
+  </script>
+</body>
+</html>

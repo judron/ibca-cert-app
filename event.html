@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>פרטי המפגש · הסמכת קוד המקצוע</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" type="image/png" href="icons/icon-192.png" />
+  <meta name="theme-color" content="#1F3864" />
+  <style>
+    .ev-row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+    .ev-row:last-child{border-bottom:none}
+    .ev-ic{font-size:22px;flex:none;width:30px;text-align:center}
+    .ev-k{font-weight:700;color:var(--navy);font-size:14px}
+    .ev-v{color:var(--ink)}
+    .cal-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-title">לשכת היועצים העסקיים והניהוליים בישראל</span>
+        <span class="brand-sub">ועדת קוד המקצוע · פרטי המפגש</span>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="container">
+    <div class="loading">טוען…</div>
+  </main>
+
+  <footer class="footer">
+    <span>לשכת היועצים העסקיים והניהוליים בישראל (IBCA) · ועדת קוד המקצוע</span>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var appEl = document.getElementById("app");
+    var CFG = window.APP_CONFIG || {};
+    var EV = CFG.event || {};
+
+    function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+    function set(html){ appEl.innerHTML = html; }
+
+    // ---- עזרי יומן ----
+    function fold(line){ return line; }
+    function calText(){
+      // תיאור משולב: הטקסט החופשי + הזום אם קיים.
+      var d = EV.details || "";
+      if (EV.zoomUrl){ d += (d?"\n\n":"") + "קישור זום: " + EV.zoomUrl; }
+      return d;
+    }
+    function locText(){
+      return [EV.locationName, EV.address].filter(Boolean).join(", ");
+    }
+    function googleUrl(){
+      var p = {
+        action: "TEMPLATE",
+        text: EV.title || "מפגש",
+        dates: (EV.start||"") + "/" + (EV.end||""),
+        ctz: EV.timezone || "Asia/Jerusalem",
+        details: calText(),
+        location: locText()
+      };
+      var q = Object.keys(p).map(function(k){ return k+"="+encodeURIComponent(p[k]); }).join("&");
+      return "https://calendar.google.com/calendar/render?" + q;
+    }
+    // המרה מ-YYYYMMDDThhmmss ל-ISO מקומי (לאאוטלוק דיפלינק)
+    function iso(s){
+      if (!s || s.length < 15) return "";
+      return s.slice(0,4)+"-"+s.slice(4,6)+"-"+s.slice(6,8)+"T"+s.slice(9,11)+":"+s.slice(11,13)+":"+s.slice(13,15);
+    }
+    function outlookUrl(){
+      var base = "https://outlook.office.com/calendar/0/deeplink/compose";
+      var p = {
+        path: "/calendar/action/compose",
+        rru: "addevent",
+        subject: EV.title || "מפגש",
+        startdt: iso(EV.start),
+        enddt: iso(EV.end),
+        body: calText(),
+        location: locText()
+      };
+      var q = Object.keys(p).map(function(k){ return k+"="+encodeURIComponent(p[k]); }).join("&");
+      return base + "?" + q;
+    }
+    function icsString(){
+      var now = new Date();
+      function z(n){ return (n<10?"0":"")+n; }
+      var stamp = now.getUTCFullYear()+z(now.getUTCMonth()+1)+z(now.getUTCDate())+"T"+z(now.getUTCHours())+z(now.getUTCMinutes())+z(now.getUTCSeconds())+"Z";
+      var uid = "ibca-" + (EV.start||"") + "@ibca.cert";
+      var tz = EV.timezone || "Asia/Jerusalem";
+      var lines = [
+        "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//IBCA//cert//HE","CALSCALE:GREGORIAN","METHOD:PUBLISH",
+        "BEGIN:VEVENT",
+        "UID:"+uid,
+        "DTSTAMP:"+stamp,
+        "DTSTART;TZID="+tz+":"+(EV.start||""),
+        "DTEND;TZID="+tz+":"+(EV.end||""),
+        "SUMMARY:"+icsEsc(EV.title||"מפגש"),
+        "DESCRIPTION:"+icsEsc(calText()),
+        "LOCATION:"+icsEsc(locText())
+      ];
+      if (EV.zoomUrl){ lines.push("URL:"+icsEsc(EV.zoomUrl)); }
+      lines.push("END:VEVENT","END:VCALENDAR");
+      return lines.join("\r\n");
+    }
+    function icsEsc(s){ return String(s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+
+    // ---- שיתוף בוואטסאפ ----
+    function shareText(){
+      var parts = [EV.title || "סדנת הסמכת קוד המקצוע"];
+      var dt = [EV.dateText, EV.timeText].filter(Boolean).join(" · ");
+      if (dt){ parts.push("🗓️ " + dt); }
+      var loc = locText(); if (loc){ parts.push("📍 " + loc); }
+      parts.push("פרטים והוספה ליומן: " + location.href);
+      return parts.join("\n");
+    }
+    function downloadIcs(){
+      var blob = new Blob([icsString()], { type: "text/calendar;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = "ibca-event.ics";
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+    }
+
+    function render(){
+      var hasDate = EV.dateText || EV.start;
+      var html = '<h1>'+esc(EV.title||"פרטי המפגש")+'</h1>'+
+        '<p class="lead">כל הפרטים למפגש ההסמכה, והוספה מהירה ליומן.</p>'+
+        '<div class="card">';
+
+      html += row("📅", "תאריך", (EV.dateText||"ייקבע ויעודכן"));
+      if (EV.timeText){ html += row("🕘", "שעה", EV.timeText); }
+
+      if (EV.locationName || EV.address){
+        var loc = esc(locText());
+        if (EV.mapUrl){ loc = '<a href="'+esc(EV.mapUrl)+'" target="_blank" rel="noopener">'+loc+'</a>'; }
+        html += rowHtml("📍", "מיקום", loc);
+      }
+
+      if (EV.zoomUrl){
+        html += rowHtml("💻", "קישור זום",
+          '<a class="btn btn-sm btn-gold" href="'+esc(EV.zoomUrl)+'" target="_blank" rel="noopener">הצטרפות בזום</a>'+
+          '<div class="muted" style="margin-top:4px;word-break:break-all">'+esc(EV.zoomUrl)+'</div>');
+      }
+
+      if (EV.details){ html += rowHtml("📝", "פרטים", esc(EV.details).replace(/\n/g,"<br>")); }
+
+      html += '</div>';
+
+      // הוספה ליומן
+      html += '<div class="card"><h2 style="margin-top:0">הוספה ליומן</h2>'+
+        '<p class="muted">בחרו את היומן שלכם. קובץ ה-ICS מתאים לכל יומן (אאוטלוק במחשב, Apple ועוד).</p>'+
+        '<div class="cal-btns">'+
+          '<a class="btn btn-outline" id="gcal" target="_blank" rel="noopener">Google Calendar</a>'+
+          '<a class="btn btn-outline" id="ocal" target="_blank" rel="noopener">Outlook</a>'+
+          '<button class="btn btn-outline" id="ics">הורדת קובץ ליומן (.ics)</button>'+
+        '</div></div>';
+
+      // שיתוף בוואטסאפ
+      html += '<div class="card"><h2 style="margin-top:0">שיתוף בוואטסאפ</h2>'+
+        '<p class="muted">שליחת פרטי המפגש לקולגה או לקבוצה.</p>'+
+        '<div class="cal-btns">'+
+          '<a class="btn" id="waApp" target="_blank" rel="noopener" style="background:#25D366;color:#fff">וואטסאפ</a>'+
+          '<a class="btn btn-outline" id="waWeb" target="_blank" rel="noopener">וואטסאפ ווב</a>'+
+          '<a class="btn btn-outline" id="waBiz">וואטסאפ ביזנס</a>'+
+        '</div></div>';
+
+      // יצירת קשר
+      if (EV.contactEmail || EV.contactPhone){
+        html += '<div class="card"><h3 style="margin-top:0">שאלות?</h3><p class="muted">'+
+          (EV.contactEmail?('מייל: <a href="mailto:'+esc(EV.contactEmail)+'">'+esc(EV.contactEmail)+'</a>'):'')+
+          (EV.contactPhone?('<br>טלפון: '+esc(EV.contactPhone)):'')+
+          '</p></div>';
+      }
+
+      html += '<p class="muted" style="text-align:center"><a href="index.html">כניסה לאזור האישי ←</a></p>';
+
+      set(html);
+
+      document.getElementById("gcal").href = googleUrl();
+      document.getElementById("ocal").href = outlookUrl();
+      document.getElementById("ics").onclick = downloadIcs;
+
+      var t = encodeURIComponent(shareText());
+      document.getElementById("waApp").href = "https://wa.me/?text=" + t;         // אפליקציה (רגיל/עסקי לפי המותקן)
+      document.getElementById("waWeb").href = "https://web.whatsapp.com/send?text=" + t; // וואטסאפ ווב
+      document.getElementById("waBiz").href = "whatsapp://send?text=" + t;        // אפליקציית ביזנס המותקנת
+    }
+
+    function row(ic, k, v){ return rowHtml(ic, k, esc(v)); }
+    function rowHtml(ic, k, vHtml){
+      return '<div class="ev-row"><div class="ev-ic">'+ic+'</div><div><div class="ev-k">'+esc(k)+'</div><div class="ev-v">'+vHtml+'</div></div></div>';
+    }
+
+    render();
+  })();
+  </script>
+</body>
+</html>
